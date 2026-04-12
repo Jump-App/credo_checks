@@ -1,0 +1,330 @@
+defmodule Jump.CredoChecks.VacuousTest do
+  use Credo.Check,
+    base_priority: :high,
+    category: :warning,
+    param_defaults: [library_modules: [], ignore_setup_only_tests?: true],
+    explanations: [
+      check: """
+      Tests should exercise your application's functions. A test that only asserts
+      on literals, standard library calls, or third-party library calls is not
+      verifying any application behavior.
+
+          # ❌ Vacuous — no application code is called
+          test "example" do
+            refute 3 in [1, 2, 5]
+            assert byte_size("hello") > 0
+            assert :ok == :ok
+          end
+
+          # ✅ Meaningful — exercises application code
+          test "example" do
+            result = MyApp.process("hello")
+            assert result == "expected"
+          end
+
+      This is especially useful in the age of LLMs, where AI agents frequently generate
+      low-quality tests with ambitious-sounding names, but whose implementation does not
+      actually guarantee the test title promises.
+      """,
+      params: [
+        library_modules:
+          "Additional library namespaces whose calls should not count as production code, like Jason or Phoenix.",
+        ignore_setup_only_tests?:
+          "When true (default), tests that destructure setup context (3-arity test blocks) are considered not vacuous. Set to false to check them too."
+      ]
+    ]
+
+  # Modules from the standard library. Calls to these don't count as "production code."
+  @library_modules MapSet.new([
+                     Access,
+                     Agent,
+                     Application,
+                     Atom,
+                     Base,
+                     Calendar,
+                     Code,
+                     Date,
+                     DateTime,
+                     DynamicSupervisor,
+                     Enum,
+                     Enumerable,
+                     ExUnit,
+                     File,
+                     Float,
+                     GenServer,
+                     IO,
+                     Inspect,
+                     Integer,
+                     JSON,
+                     Kernel,
+                     Keyword,
+                     List,
+                     Macro,
+                     Map,
+                     MapSet,
+                     Module,
+                     NaiveDateTime,
+                     NimbleCSV,
+                     Node,
+                     OptionParser,
+                     Path,
+                     Phoenix,
+                     Plug,
+                     Port,
+                     Process,
+                     Protocol,
+                     Range,
+                     Record,
+                     Regex,
+                     Registry,
+                     Stream,
+                     String,
+                     StringIO,
+                     Supervisor,
+                     System,
+                     Task,
+                     Time,
+                     Tuple,
+                     URI,
+                     Version
+                   ])
+
+  # Unqualified function names that are standard (Kernel builtins, special
+  # forms, ExUnit macros, etc.) and don't count as "production code".
+  @standard_functions (Kernel.__info__(:functions) ++ Kernel.__info__(:macros))
+                      |> MapSet.new(fn {fun, _arity} -> fun end)
+                      |> MapSet.union(
+                        MapSet.new([
+                          :assert,
+                          :assert_in_delta,
+                          :assert_in_epsilon,
+                          :assert_raise,
+                          :assert_receive,
+                          :assert_received,
+                          :case,
+                          :catch_error,
+                          :catch_exit,
+                          :catch_throw,
+                          :check,
+                          :cond,
+                          :describe,
+                          :flunk,
+                          :fn,
+                          :for,
+                          :import,
+                          :on_exit,
+                          :quote,
+                          :receive,
+                          :refute,
+                          :refute_in_delta,
+                          :refute_receive,
+                          :refute_received,
+                          :require,
+                          :setup,
+                          :setup_all,
+                          :super,
+                          :test,
+                          :try,
+                          :unquote,
+                          :unquote_splicing,
+                          :when,
+                          :with
+                        ])
+                      )
+
+  @doc false
+  @impl Credo.Check
+  def run(%SourceFile{filename: filename} = source_file, params \\ []) do
+    issue_meta = IssueMeta.for(source_file, params)
+
+    if String.ends_with?(filename, "_test.exs") do
+      additional_library_modules = Params.get(params, :library_modules, __MODULE__) || []
+      ignore_setup_only_tests? = Params.get(params, :ignore_setup_only_tests?, __MODULE__)
+
+      library_modules =
+        MapSet.new(additional_library_modules)
+        |> MapSet.union(@library_modules)
+        |> MapSet.new(fn mod ->
+          mod |> Module.split() |> hd() |> String.to_atom()
+        end)
+
+      aliases = collect_aliases(source_file)
+
+      Credo.Code.prewalk(
+        source_file,
+        &traverse(&1, &2, issue_meta, aliases, library_modules, ignore_setup_only_tests?)
+      )
+    else
+      []
+    end
+  end
+
+  # Test block without context — check whether it calls any production code.
+  defp traverse(
+         {:test, meta, [_name, [do: body]]} = _ast,
+         issues,
+         issue_meta,
+         aliases,
+         library_modules,
+         _ignore_setup_only_tests?
+       ) do
+    if calls_production_code?(body, aliases, library_modules) do
+      {:ok, issues}
+    else
+      {:ok,
+       [
+         format_issue(
+           issue_meta,
+           message:
+             "This test does not call any application code and may not be providing value. " <>
+               "Tests should exercise your application's functions, not just assert on literals, library calls, or core Elixir functionality.",
+           trigger: "test",
+           line_no: meta[:line]
+         )
+         | issues
+       ]}
+    end
+  end
+
+  # Test block with context pattern — when ignore_setup_only_tests? is true, skip.
+  defp traverse(
+         {:test, _meta, [_name, _context, [do: _body]]} = _ast,
+         issues,
+         _issue_meta,
+         _aliases,
+         _library_modules,
+         true = _ignore_setup_only_tests?
+       ) do
+    {:ok, issues}
+  end
+
+  # Test block with context pattern — when ignore_setup_only_tests? is false, check it.
+  defp traverse(
+         {:test, meta, [_name, _context, [do: body]]} = _ast,
+         issues,
+         issue_meta,
+         aliases,
+         library_modules,
+         false = _ignore_setup_only_tests?
+       ) do
+    if calls_production_code?(body, aliases, library_modules) do
+      {:ok, issues}
+    else
+      {:ok,
+       [
+         format_issue(
+           issue_meta,
+           message:
+             "This test does not call any application code and may not be providing value. " <>
+               "Tests should exercise your application's functions, not just assert on literals, library calls, or core Elixir functionality.",
+           trigger: "test",
+           line_no: meta[:line]
+         )
+         | issues
+       ]}
+    end
+  end
+
+  defp traverse(ast, issues, _issue_meta, _aliases, _library_modules, _ignore_setup_only_tests?) do
+    {ast, issues}
+  end
+
+  # Walks the test body AST looking for any function call that isn't
+  # from the standard library or a well-known third-party package.
+  defp calls_production_code?(body, aliases, library_modules) do
+    {_, found?} = Macro.prewalk(body, false, &find_production_call(&1, &2, aliases, library_modules))
+    found?
+  end
+
+  defp find_production_call(node, true, _aliases, _library_modules), do: {node, true}
+
+  # Qualified call: Module.function(args)
+  defp find_production_call(
+         {{:., _, [{:__aliases__, _, module_parts}, _fn]}, _, args} = node,
+         false,
+         aliases,
+         library_modules
+       )
+       when is_list(args) do
+    if library_module?(module_parts, aliases, library_modules), do: {node, false}, else: {node, true}
+  end
+
+  # Module attribute call: @module.function(args) — the attribute holds a production module
+  defp find_production_call({{:., _, [{:@, _, _}, _fn]}, _, args} = node, false, _aliases, _library_modules)
+       when is_list(args) do
+    {node, true}
+  end
+
+  # Variable-based call: var.function(args) — the variable likely holds a production module.
+  # Distinguish from field access (user.id) by checking for no_parens metadata.
+  defp find_production_call(
+         {{:., _, [{var_name, _, context}, _fn]}, meta, args} = node,
+         false,
+         _aliases,
+         _library_modules
+       )
+       when is_atom(var_name) and is_atom(context) and is_list(args) do
+    if Keyword.get(meta, :no_parens, false) do
+      {node, false}
+    else
+      {node, true}
+    end
+  end
+
+  # use Module — counts as production code if the module isn't from stdlib/libraries
+  defp find_production_call(
+         {:use, _meta, [{:__aliases__, _, module_parts} | _]} = node,
+         false,
+         aliases,
+         library_modules
+       )
+       when is_list(module_parts) do
+    if library_module?(module_parts, aliases, library_modules), do: {node, false}, else: {node, true}
+  end
+
+  # Unqualified call: function(args)
+  defp find_production_call({fn_name, _meta, args} = node, false, _aliases, _library_modules)
+       when is_atom(fn_name) and is_list(args) do
+    name_str = Atom.to_string(fn_name)
+
+    if String.match?(name_str, ~r/^[a-z]/) and
+         not String.starts_with?(name_str, "sigil_") and
+         not MapSet.member?(@standard_functions, fn_name) do
+      {node, true}
+    else
+      {node, false}
+    end
+  end
+
+  defp find_production_call(node, acc, _aliases, _library_modules), do: {node, acc}
+
+  # If the module's short name is aliased, resolve to the full module path
+  # before checking against the library list.
+  defp library_module?([first | _], aliases, library_modules) when is_atom(first) do
+    resolved_first =
+      case Map.get(aliases, first) do
+        nil -> first
+        full_module -> hd(full_module)
+      end
+
+    MapSet.member?(library_modules, resolved_first)
+  end
+
+  defp library_module?(_, _aliases, _library_modules), do: false
+
+  defp collect_aliases(source_file) do
+    Credo.Code.prewalk(
+      source_file,
+      fn
+        {:alias, _, [{:__aliases__, _, module_parts}]} = node, acc
+        when is_list(module_parts) and length(module_parts) > 1 ->
+          short_name = List.last(module_parts)
+          {node, Map.put(acc, short_name, module_parts)}
+
+        node, acc ->
+          {node, acc}
+      end,
+      %{}
+    )
+  end
+end

@@ -1,0 +1,41 @@
+name: Elixir Quality Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  quality_checks:
+    name: Formatting, Credo, and Unused Deps
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: dev
+      elixir: "1.19.4"
+      otp: "28.3.1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Elixir Project
+        uses: ./.github/actions/elixir-setup
+        with:
+          elixir-version: ${{ env.elixir }}
+          otp-version: ${{ env.otp }}
+          build-app: false
+
+      - name: Check for unused deps
+        run: mix deps.unlock --check-unused
+        if: always()
+
+      - name: Check code formatting
+        run: mix format --check-formatted
+        if: always()
+
+      - name: Run Credo
+        run: mix credo suggest --min-priority=normal
+        if: always()

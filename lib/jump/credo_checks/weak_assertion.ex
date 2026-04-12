@@ -1,4 +1,4 @@
-defmodule CredoChecks.WeakAssertion do
+defmodule Jump.CredoChecks.WeakAssertion do
   @moduledoc """
   Ensures tests don't use low-value assertions like `refute is_nil(val)`.
 

@@ -42,6 +42,31 @@ See the individual modules for detailed descriptions of each check type.
     assert is_nil(error)
     assert %Product{} = result
     ```
+- `Jump.CredoChecks.TooManyAssertions`: Flags tests that make an excessive number of assertions, generally indicating a test that conflates multiple concerns. Defaults to 20 asserts at max.
+- `Jump.CredoChecks.UseObanProWorker`: Ensures your Oban worker modules consistently `use Oban.Pro.Worker` rather than `use Oban.Worker` so that you get all the benefits of the Pro package.
+- `Jump.CredoChecks.PreferTextColumns`: Ensures your Ecto migrations use the `:text` column type, rather than `:string`, since there is no performance difference in modern versions of Postgres, and you almost always want to enforce maximum length at the application level instead.
+- `Jump.CredoChecks.AvoidSocketAssignsInTest`: Ensure that tests assert on expected user behavior rather than introspecting socket `assigns`.
+- `Jump.CredoChecks.AvoidLoggerConfigureInTest`: Ensure your tests don't call `Logger.configure/1` and thereby affect log levels for other tests.
+- `Jump.CredoChecks.TopLevelAliasImportRequire`: Ensures `alias`, `import`, and `require` statements occur only at the top level of a module, rather than within a function.
+- `Jump.CredoChecks.AvoidFunctionLevelElse`: Prevents botched refactors or rebases from introducing `else` clauses at the top level of a function body.
+
+    ```elixir
+    # ❌ Bad — function-level else crashes if `something(bar)` does not return an error tuple
+    def foo(bar) do
+      something(bar)
+    else
+      {:error, reason} -> handle_error(reason)
+    end
+
+    # ✅ Good — use with/else or case instead
+    def foo(bar) do
+      with {:ok, result} <- something(bar) do
+        result
+      else
+        {:error, reason} -> handle_error(reason)
+      end
+    end
+    ```
 
 ## Installation and configuration
 
@@ -65,6 +90,16 @@ The following instructions assume you already have Credo configured and working 
         %{
           checks: %{
             enabled: [
+              {Jump.CredoChecks.AvoidFunctionLevelElse, []},
+              {Jump.CredoChecks.AvoidLoggerConfigureInTest, []},
+              # Default exclusion list is empty
+              {Jump.CredoChecks.AvoidSocketAssignsInTest, excluded: ["test/app_web/plugs/"]},
+              # Default start_after is "0"
+              {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},
+              # Default max_assertions is 20
+              {Jump.CredoChecks.TooManyAssertions, [max_assertions: 20]},
+              {Jump.CredoChecks.TopLevelAliasImportRequire, []},
+              {Jump.CredoChecks.UseObanProWorker, []},
               {Jump.CredoChecks.VacuousTest,
                 [
                   # When true (default), tests that destructure setup context 

@@ -157,6 +157,12 @@ We use Credo checks primarily as just-in-time education for encouraging best pra
 
 Thus, we don't use Credo in cases where we can instead use [Quokka](https://github.com/emkguts/quokka) (or Quokka [plugins](https://github.com/emkguts/quokka/pull/141)) to automatically rewrite code. For instance, there's no need to bug developers with a Credo check that asks them to rewrite `Enum.map(...) |> Enum.into(%{})` to instead use `Map.new/2`; we can rewrite that automatically and never need the education.
 
+## A request for you, the user
+
+If you use these checks, please give us feedback—which checks were valuable for you, and which weren't?
+
+You're welcome to file an issue with your feedback, or contact Tyler Young, one of the maintainers, directly [via email](mailto:tyler@jumpapp.com), [on BlueSky](https://bsky.app/profile/tylerayoung.com), or [on Mastodon](https://fosstodon.org/@tylerayoung).
+
 ## Contribution guidelines
 
 We welcome pull requests, but be aware that if the proposed checks/changes aren't something we'd want to use in the Jump codebase, we'll politely decline them. (Feel free to open an issue to discuss and get conceptual agreement before doing the work if you'd like.)

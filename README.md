@@ -1,4 +1,4 @@
-# credo_checks
+# Jump.CredoChecks
 
 [![Hex.pm](https://img.shields.io/hexpm/v/jump_credo_checks)](https://hex.pm/packages/jump_credo_checks) [![Build and Test](https://github.com/Jump-App/credo_checks/actions/workflows/elixir-build-and-test.yml/badge.svg)](https://github.com/Jump-App/credo_checks/actions/workflows/elixir-build-and-test.yml) [![Elixir Quality Checks](https://github.com/Jump-App/credo_checks/actions/workflows/elixir-quality-checks.yml/badge.svg)](https://github.com/Jump-App/credo_checks/actions/workflows/elixir-quality-checks.yml) [![Code coverage](https://codecov.io/gh/Jump-App/credo_checks/graph/badge.svg)](https://codecov.io/gh/Jump-App/credo_checks)
 

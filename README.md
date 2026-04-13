@@ -67,6 +67,11 @@ See the individual modules for detailed descriptions of each check type.
       end
     end
     ```
+- `Jump.CredoChecks.TestHasNoAssertions`: Alerts on ExUnit `test` blocks that contain no assertions.
+- `Jump.CredoChecks.AssertElementSelectorCanNeverFail`: Prevents asserting on a `LiveViewTest.element/{2,3}` call, which can never fail since the function always returns a (possibly empty) list.
+- `Jump.CredoChecks.DoctestIExExamples`: Ensures that modules with interactive Elixir examples in their docstrings have a corresponding test file that runs those doctests.
+- `Jump.CredoChecks.ForbiddenFunction`: Alerts with a custom error message when particular functions are called.
+- `Jump.CredoChecks.LiveViewFormCanBeRehydrated`: Ensures any form with a `phx-submit` attribute also includes an ID and `phx-change` handler. Without these, LiveView can't maintain frontend form state across deploys/reconnects, leading to the form being totally reset.
 
 ## Installation and configuration
 
@@ -90,12 +95,29 @@ The following instructions assume you already have Credo configured and working 
         %{
           checks: %{
             enabled: [
+              {Jump.CredoChecks.AssertElementSelectorCanNeverFail, []},
               {Jump.CredoChecks.AvoidFunctionLevelElse, []},
               {Jump.CredoChecks.AvoidLoggerConfigureInTest, []},
               # Default exclusion list is empty
               {Jump.CredoChecks.AvoidSocketAssignsInTest, excluded: ["test/app_web/plugs/"]},
+              {Jump.CredoChecks.DoctestIExExamples, [
+                # Tells Credo where to look for the `doctest` call.
+                # If you colocate your test files with your implementation, this would just
+                # be `&String.replace_trailing(&1, ".ex", "_test.exs")`
+                derive_test_path: fn filename ->
+                  filename
+                  |> String.replace_leading("lib/", "test/")
+                  |> String.replace_trailing(".ex", "_test.exs")
+                end
+              ]},
+              {Jump.CredoChecks.ForbiddenFunction, 
+               functions: [
+                 {:erlang, :binary_to_term, "Use Plug.Crypto.non_executable_binary_to_term/2 instead."},
+               ]},
+              {Jump.CredoChecks.LiveViewFormCanBeRehydrated, excluded: ["lib/my_app/"]}
               # Default start_after is "0"
               {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},
+              {Jump.CredoChecks.TestHasNoAssertions, custom_assertion_functions: [:await_has, :await_with_timeout]},
               # Default max_assertions is 20
               {Jump.CredoChecks.TooManyAssertions, [max_assertions: 20]},
               {Jump.CredoChecks.TopLevelAliasImportRequire, []},

@@ -18,6 +18,8 @@ defmodule Jump.CredoChecks.MixProject do
       package: package(),
       aliases: aliases(),
       test_coverage: [tool: ExCoveralls],
+      test_load_filters: [&(String.ends_with?(&1, "_test.exs") and not String.contains?(&1, "fixtures"))],
+      test_ignore_filters: [&String.contains?(&1, "fixtures")],
       preferred_cli_env: [
         check: :test,
         coveralls: :test,

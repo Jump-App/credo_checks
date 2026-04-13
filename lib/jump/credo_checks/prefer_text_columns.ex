@@ -40,7 +40,9 @@ defmodule Jump.CredoChecks.PreferTextColumns do
     ]
 
   def run(source_file, params) do
-    if relevant_file?(source_file.filename, params[:start_after]) do
+    start_after = Params.get(params, :start_after, __MODULE__)
+
+    if relevant_file?(source_file.filename, start_after) do
       issue_meta = IssueMeta.for(source_file, params)
       Credo.Code.prewalk(source_file, &traverse(&1, &2, issue_meta))
     else

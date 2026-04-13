@@ -477,7 +477,7 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
   end
 
   defp exclude_path?(filename, params) when is_binary(filename) and (is_list(params) or is_map(params)) do
-    excluded_path_substrings = List.wrap(params[:excluded])
+    excluded_path_substrings = params |> Params.get(:excluded, __MODULE__) |> List.wrap()
     String.contains?(filename, excluded_path_substrings)
   end
 end

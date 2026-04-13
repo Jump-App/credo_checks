@@ -44,7 +44,8 @@ defmodule Jump.CredoChecks.TestHasNoAssertions do
     issue_meta = IssueMeta.for(source_file, params)
 
     if String.ends_with?(filename, "_test.exs") do
-      functions = List.wrap(params[:custom_assertion_functions]) ++ @default_assertion_functions
+      custom_assertion_functions = params |> Params.get(:custom_assertion_functions, __MODULE__) |> List.wrap()
+      functions = custom_assertion_functions ++ @default_assertion_functions
       Credo.Code.prewalk(source_file, &traverse(&1, &2, issue_meta, functions))
     else
       []

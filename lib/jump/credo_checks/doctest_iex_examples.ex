@@ -54,20 +54,8 @@ defmodule Jump.CredoChecks.DoctestIExExamples do
         issue_meta = IssueMeta.for(source_file, params)
         module_name = extract_module_name(ast)
 
-        derive_test_path =
-          case params[:derive_test_path] do
-            fun when is_function(fun, 1) ->
-              fun
-
-            _ ->
-              fn filename ->
-                filename
-                |> String.replace_leading("lib/", "test/")
-                |> String.replace_trailing(".ex", "_test.exs")
-              end
-          end
-
         if module_name do
+          derive_test_path = Params.get(params, :derive_test_path, __MODULE__)
           test_file = derive_test_path.(source_file.filename)
           check_test_file(test_file, module_name, iex_line, issue_meta)
         else

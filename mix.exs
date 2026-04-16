@@ -47,6 +47,7 @@ defmodule Jump.CredoChecks.MixProject do
   defp deps do
     [
       {:credo, "~> 1.7"},
+      {:igniter, ">= 0.0.0", optional: true},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: [:dev, :test], runtime: false},
       {:quokka, "~> 2.12", only: [:dev, :test], runtime: false}

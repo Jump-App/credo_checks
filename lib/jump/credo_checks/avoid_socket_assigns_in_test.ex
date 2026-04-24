@@ -26,7 +26,7 @@ defmodule Jump.CredoChecks.AvoidSocketAssignsInTest do
   def run(%SourceFile{filename: filename} = source_file, params \\ []) do
     issue_meta = IssueMeta.for(source_file, params)
 
-    if String.ends_with?(filename, "_test.exs") do
+    if String.ends_with?(filename, "_test.exs") and not plug_test_module?(issue_meta) do
       Credo.Code.prewalk(source_file, &traverse(&1, &2, issue_meta))
     else
       []
@@ -50,7 +50,7 @@ defmodule Jump.CredoChecks.AvoidSocketAssignsInTest do
   end
 
   defp maybe_add_issue(ast, meta, issues, issue_meta, trigger) do
-    if plug_test_module?(issue_meta) or plug_test?(issue_meta, meta[:line]) do
+    if plug_test?(issue_meta, meta[:line]) do
       {nil, issues}
     else
       {nil, [create_issue(issue_meta, Macro.to_string(ast), meta[:line], trigger) | issues]}

@@ -30,6 +30,7 @@ if Code.ensure_loaded?(Igniter) do
     alias Jump.CredoChecks.DoctestIExExamples
     alias Jump.CredoChecks.ForbiddenFunction
     alias Jump.CredoChecks.LiveViewFormCanBeRehydrated
+    alias Jump.CredoChecks.PreferChangeOverUpDownMigrations
     alias Jump.CredoChecks.PreferTextColumns
     alias Jump.CredoChecks.TestHasNoAssertions
     alias Jump.CredoChecks.TooManyAssertions
@@ -46,6 +47,7 @@ if Code.ensure_loaded?(Igniter) do
       DoctestIExExamples,
       ForbiddenFunction,
       LiveViewFormCanBeRehydrated,
+      PreferChangeOverUpDownMigrations,
       PreferTextColumns,
       TestHasNoAssertions,
       TooManyAssertions,

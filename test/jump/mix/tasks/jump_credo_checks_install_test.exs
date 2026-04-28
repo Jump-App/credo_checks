@@ -54,6 +54,7 @@ defmodule Mix.Tasks.JumpCredoChecks.InstallTest do
       + |{Jump.CredoChecks.DoctestIExExamples, []},
       + |{Jump.CredoChecks.ForbiddenFunction, []},
       + |{Jump.CredoChecks.LiveViewFormCanBeRehydrated, []},
+      + |{Jump.CredoChecks.PreferChangeOverUpDownMigrations, []},
       + |{Jump.CredoChecks.PreferTextColumns, []},
       + |{Jump.CredoChecks.TestHasNoAssertions, []},
       + |{Jump.CredoChecks.TooManyAssertions, []},

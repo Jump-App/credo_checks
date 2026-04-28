@@ -72,8 +72,14 @@ See the individual modules for detailed descriptions of each check type.
     assert is_nil(error)
     assert %Product{} = result
     ```
+- `Jump.CredoChecks.PreferChangeOverUpDownMigrations`: Detects Ecto migrations which define separate `up`/`down`
+  callbacks but could instead take advantage of Ecto's automatic reversibility by using `change/0`.
+
 
 ## Installation and configuration
+
+**New in v0.2**: If you've already configured [Igniter](https://hexdocs.pm/igniter/) in your project,
+you can use `mix igniter.install jump_credo_checks` to automate all the steps in this section.
 
 The following instructions assume you already have Credo configured and working on your codebase.
 
@@ -82,7 +88,7 @@ The following instructions assume you already have Credo configured and working 
     ```elixir
     def deps do
       [
-        {:jump_credo_checks, "~> 0.1", only: [:dev], runtime: false},
+        {:jump_credo_checks, "~> 0.2", only: [:dev], runtime: false},
       ]
     end
     ```
@@ -116,6 +122,7 @@ The following instructions assume you already have Credo configured and working 
                ]},
               {Jump.CredoChecks.LiveViewFormCanBeRehydrated, excluded: ["lib/my_app/"]},
               # Default start_after is "0"
+              {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},
               {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},
               {Jump.CredoChecks.TestHasNoAssertions, custom_assertion_functions: [:await_has, :await_with_timeout]},
               # Default max_assertions is 20

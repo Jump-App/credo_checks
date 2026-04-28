@@ -6,7 +6,7 @@ defmodule Jump.CredoChecks.MixProject do
   def project do
     [
       app: :jump_credo_checks,
-      version: "0.1.0",
+      version: "0.2.0",
       elixir: "~> 1.18",
       consolidate_protocols: Mix.env() != :test,
       elixirc_paths: elixirc_paths(Mix.env()),

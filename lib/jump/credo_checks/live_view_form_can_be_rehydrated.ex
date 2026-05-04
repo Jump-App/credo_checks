@@ -5,6 +5,9 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
   This is critical for form rehydration, since LiveView can't maintain form state across
   deploys or reconnects without an ID and phx-change, leading to the form being totally reset.
   Forms without `phx-submit` are not LiveView forms and don't need these attributes.
+
+  Forms that opt out of recovery via `phx-auto-recover="ignore"` are not required to have
+  `phx-change`, since they have explicitly disabled the rehydration behavior.
   """
   use Credo.Check,
     base_priority: :high,
@@ -126,115 +129,45 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
     |> Enum.reduce({[], nil}, fn {line, line_no}, {issues, current_tag} ->
       cond do
         # If we're tracking a tag, check if this line closes it or has required attributes
-        current_tag != nil ->
-          {tag_line, tag_line_no, tag_trigger, tag_message, has_phx_submit, has_id, has_phx_validate} =
+        is_map(current_tag) ->
+          current_tag = %{
             current_tag
+            | has_phx_submit?: current_tag.has_phx_submit? or Regex.match?(~r/\bphx-submit\s*=/i, line),
+              has_id?: current_tag.has_id? or Regex.match?(~r/\bid\s*=/i, line),
+              has_phx_validate?: current_tag.has_phx_validate? or Regex.match?(~r/\bphx-change\s*=/i, line),
+              has_auto_recover_ignore?:
+                current_tag.has_auto_recover_ignore? or
+                  Regex.match?(~r/\bphx-auto-recover\s*=\s*["']ignore["']/i, line)
+          }
 
-          # Check for required attributes on this line
-          has_phx_submit_on_line = has_phx_submit or Regex.match?(~r/\bphx-submit\s*=/i, line)
-          has_id_on_line = has_id or Regex.match?(~r/\bid\s*=/i, line)
-          has_phx_validate_on_line = has_phx_validate or Regex.match?(~r/\bphx-change\s*=/i, line)
-
-          # Tag closes on this line
           if String.contains?(line, ">") do
-            # Only report if tag has phx-submit but missing id or phx-change
-            new_issues =
-              if has_phx_submit_on_line do
-                missing_attrs = []
-                missing_attrs = if has_id_on_line, do: missing_attrs, else: ["id" | missing_attrs]
-
-                missing_attrs =
-                  if has_phx_validate_on_line, do: missing_attrs, else: ["phx-change" | missing_attrs]
-
-                if Enum.empty?(missing_attrs) do
-                  []
-                else
-                  attr_list = Enum.join(Enum.reverse(missing_attrs), " and ")
-
-                  custom_message =
-                    String.replace(
-                      tag_message,
-                      "'id' attribute",
-                      "'#{attr_list}' #{if length(missing_attrs) == 1, do: "attribute", else: "attributes"}"
-                    )
-
-                  issue =
-                    create_form_issue(
-                      tag_line,
-                      indentation,
-                      tag_line_no,
-                      issue_meta,
-                      tag_trigger,
-                      custom_message
-                    )
-
-                  [issue]
-                end
-              else
-                []
-              end
-
-            {new_issues ++ issues, nil}
+            {form_complete_issues(current_tag) ++ issues, nil}
           else
             # Tag continues on next line, update tracking
-            {issues,
-             {tag_line, tag_line_no, tag_trigger, tag_message, has_phx_submit_on_line, has_id_on_line,
-              has_phx_validate_on_line}}
+            {issues, current_tag}
           end
 
         # Check if this line starts a new tag
         Regex.match?(pattern, line) ->
           # Check if the tag has required attributes on the same line
-          has_phx_submit_on_line = Regex.match?(~r/\bphx-submit\s*=/i, line)
-          has_id_on_line = Regex.match?(~r/\bid\s*=/i, line)
-          has_phx_validate_on_line = Regex.match?(~r/\bphx-change\s*=/i, line)
-          # Check if the tag closes on the same line
-          closes_on_line = String.contains?(line, ">")
+          current_tag = %{
+            has_phx_submit?: Regex.match?(~r/\bphx-submit\s*=/i, line),
+            has_id?: Regex.match?(~r/\bid\s*=/i, line),
+            has_phx_validate?: Regex.match?(~r/\bphx-change\s*=/i, line),
+            has_auto_recover_ignore?: Regex.match?(~r/\bphx-auto-recover\s*=\s*["']ignore["']/i, line),
+            tag_message: message,
+            tag_line: line,
+            indentation: indentation,
+            tag_line_no: line_no,
+            issue_meta: issue_meta,
+            tag_trigger: trigger
+          }
 
-          # Tag closes on same line
-          if closes_on_line do
-            # Only create issue if has phx-submit but missing id or phx-change
-            new_issues =
-              if has_phx_submit_on_line do
-                missing_attrs = []
-                missing_attrs = if has_id_on_line, do: missing_attrs, else: ["id" | missing_attrs]
-
-                missing_attrs =
-                  if has_phx_validate_on_line, do: missing_attrs, else: ["phx-change" | missing_attrs]
-
-                if Enum.empty?(missing_attrs) do
-                  []
-                else
-                  attr_list = Enum.join(Enum.reverse(missing_attrs), " and ")
-
-                  custom_message =
-                    String.replace(
-                      message,
-                      "'id' attribute",
-                      "'#{attr_list}' #{if length(missing_attrs) == 1, do: "attribute", else: "attributes"}"
-                    )
-
-                  issue =
-                    create_form_issue(
-                      line,
-                      indentation,
-                      line_no,
-                      issue_meta,
-                      trigger,
-                      custom_message
-                    )
-
-                  [issue]
-                end
-              else
-                []
-              end
-
-            {new_issues ++ issues, nil}
+          if String.contains?(line, ">") do
+            {form_complete_issues(current_tag) ++ issues, nil}
           else
             # Tag continues on next line, track it
-            {issues,
-             {line, line_no, trigger, message, has_phx_submit_on_line, has_id_on_line, has_phx_validate_on_line}}
+            {issues, current_tag}
           end
 
         # No match on this line
@@ -246,15 +179,46 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
     |> Enum.reverse()
   end
 
-  defp create_form_issue(line, indentation, line_no, issue_meta, trigger, message) do
-    # Find the position of the form opening
-    [before | _after] = String.split(line, trigger)
+  defp form_complete_issues(%{has_phx_submit?: false}), do: []
 
-    format_issue(issue_meta,
+  defp form_complete_issues(%{has_phx_submit?: true} = tag) do
+    missing_attrs = missing_attrs(tag)
+
+    if Enum.empty?(missing_attrs) do
+      []
+    else
+      attr_list = missing_attrs |> Enum.reverse() |> Enum.join(" and ")
+
+      custom_message =
+        String.replace(
+          tag.tag_message,
+          "'id' attribute",
+          "'#{attr_list}' #{if length(missing_attrs) == 1, do: "attribute", else: "attributes"}"
+        )
+
+      [create_form_issue(tag, custom_message)]
+    end
+  end
+
+  defp missing_attrs(tag) do
+    cond do
+      tag.has_auto_recover_ignore? -> []
+      tag.has_id? and tag.has_phx_validate? -> []
+      tag.has_id? -> ["phx-change"]
+      tag.has_phx_validate? -> ["id"]
+      true -> ["id", "phx-change"]
+    end
+  end
+
+  defp create_form_issue(tag, message) do
+    # Find the position of the form opening
+    [before | _after] = String.split(tag.tag_line, tag.tag_trigger)
+
+    format_issue(tag.issue_meta,
       message: message,
-      trigger: trigger,
-      line_no: line_no,
-      column: String.length(before) + (indentation || 0) + 1
+      trigger: tag.tag_trigger,
+      line_no: tag.tag_line_no,
+      column: String.length(before) + (tag.indentation || 0) + 1
     )
   end
 
@@ -322,24 +286,29 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
       cond do
         # If we're tracking a tag, check if this line closes it or has required attributes
         current_tag != nil ->
-          {tag_line, tag_line_no, tag_trigger, tag_message, has_phx_submit, has_id, has_phx_validate} =
-            current_tag
+          {tag_line, tag_line_no, tag_trigger, tag_message, has_phx_submit, has_id, has_phx_validate,
+           has_auto_recover_ignore} = current_tag
 
           # Check for required attributes on this line
-          has_phx_submit_on_line = has_phx_submit or Regex.match?(~r/\bphx-submit\s*=/i, line)
+          has_phx_submit = has_phx_submit or Regex.match?(~r/\bphx-submit\s*=/i, line)
           has_id_on_line = has_id or Regex.match?(~r/\bid\s*=/i, line)
           has_phx_validate_on_line = has_phx_validate or Regex.match?(~r/\bphx-change\s*=/i, line)
+
+          has_auto_recover_ignore_on_line =
+            has_auto_recover_ignore or Regex.match?(~r/\bphx-auto-recover\s*=\s*["']ignore["']/i, line)
 
           # Tag closes on this line
           if String.contains?(line, ">") do
             # Only report if tag has phx-submit but missing id or phx-change
             new_issues =
-              if has_phx_submit_on_line do
+              if has_phx_submit do
                 missing_attrs = []
                 missing_attrs = if has_id_on_line, do: missing_attrs, else: ["id" | missing_attrs]
 
                 missing_attrs =
-                  if has_phx_validate_on_line, do: missing_attrs, else: ["phx-change" | missing_attrs]
+                  if has_phx_validate_on_line or has_auto_recover_ignore_on_line,
+                    do: missing_attrs,
+                    else: ["phx-change" | missing_attrs]
 
                 if Enum.empty?(missing_attrs) do
                   []
@@ -375,16 +344,20 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
           else
             # Tag continues on next line, update tracking
             {issues,
-             {tag_line, tag_line_no, tag_trigger, tag_message, has_phx_submit_on_line, has_id_on_line,
-              has_phx_validate_on_line}}
+             {tag_line, tag_line_no, tag_trigger, tag_message, has_phx_submit, has_id_on_line, has_phx_validate_on_line,
+              has_auto_recover_ignore_on_line}}
           end
 
         # Check if this line starts a new tag
         Regex.match?(pattern, line) ->
           # Check if the tag has required attributes on the same line
-          has_phx_submit_on_line = Regex.match?(~r/\bphx-submit\s*=/i, line)
+          has_phx_submit = Regex.match?(~r/\bphx-submit\s*=/i, line)
           has_id_on_line = Regex.match?(~r/\bid\s*=/i, line)
           has_phx_validate_on_line = Regex.match?(~r/\bphx-change\s*=/i, line)
+
+          has_auto_recover_ignore_on_line =
+            Regex.match?(~r/\bphx-auto-recover\s*=\s*["']ignore["']/i, line)
+
           # Check if the tag closes on the same line
           closes_on_line = String.contains?(line, ">")
 
@@ -392,12 +365,14 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
           if closes_on_line do
             # Only create issue if has phx-submit but missing id or phx-change
             new_issues =
-              if has_phx_submit_on_line do
+              if has_phx_submit do
                 missing_attrs = []
                 missing_attrs = if has_id_on_line, do: missing_attrs, else: ["id" | missing_attrs]
 
                 missing_attrs =
-                  if has_phx_validate_on_line, do: missing_attrs, else: ["phx-change" | missing_attrs]
+                  if has_phx_validate_on_line or has_auto_recover_ignore_on_line,
+                    do: missing_attrs,
+                    else: ["phx-change" | missing_attrs]
 
                 if Enum.empty?(missing_attrs) do
                   []
@@ -433,7 +408,8 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
           else
             # Tag continues on next line, track it
             {issues,
-             {line, line_no, trigger, message, has_phx_submit_on_line, has_id_on_line, has_phx_validate_on_line}}
+             {line, line_no, trigger, message, has_phx_submit, has_id_on_line, has_phx_validate_on_line,
+              has_auto_recover_ignore_on_line}}
           end
 
         # No match on this line

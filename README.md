@@ -74,6 +74,7 @@ See the individual modules for detailed descriptions of each check type.
     ```
 - `Jump.CredoChecks.PreferChangeOverUpDownMigrations`: Detects Ecto migrations which define separate `up`/`down`
   callbacks but could instead take advantage of Ecto's automatic reversibility by using `change/0`.
+- `Jump.CredoChecks.UnusedLiveViewAssign`: Detects LiveView assigns that are written by a module but never read in that module's Elixir or HEEx source.
 
 
 ## Installation and configuration
@@ -88,7 +89,7 @@ The following instructions assume you already have Credo configured and working 
     ```elixir
     def deps do
       [
-        {:jump_credo_checks, "~> 0.2", only: [:dev], runtime: false},
+        {:jump_credo_checks, "~> 0.3", only: [:dev], runtime: false},
       ]
     end
     ```
@@ -128,6 +129,7 @@ The following instructions assume you already have Credo configured and working 
               # Default max_assertions is 20
               {Jump.CredoChecks.TooManyAssertions, [max_assertions: 20]},
               {Jump.CredoChecks.TopLevelAliasImportRequire, []},
+              {Jump.CredoChecks.UnusedLiveViewAssign, [ignored_assigns: [:active_path]]},
               {Jump.CredoChecks.UseObanProWorker, []},
               {Jump.CredoChecks.VacuousTest,
                 [

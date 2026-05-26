@@ -262,7 +262,7 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
   end
 
   defp read_keys({:=, _meta, [map_pattern, assigns_ast]}) do
-    if assigns_ast?(assigns_ast), do: map_pattern_keys(map_pattern), else: []
+    if assigns_ast?(assigns_ast) or assigns_binding_ast?(assigns_ast), do: map_pattern_keys(map_pattern), else: []
   end
 
   defp read_keys({:%{}, _meta, pairs}) do
@@ -277,6 +277,9 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
   defp assigns_ast?({:assigns, _meta, nil}), do: true
   defp assigns_ast?({{:., _dot_meta, [{_socket_name, _, _}, :assigns]}, _call_meta, args}), do: args in [[], nil]
   defp assigns_ast?(_ast), do: false
+
+  defp assigns_binding_ast?({name, _meta, nil}), do: name in [:assigns, :_assigns]
+  defp assigns_binding_ast?(_ast), do: false
 
   defp literal_keys(key) when is_atom(key), do: [key]
   defp literal_keys(keys) when is_list(keys), do: Enum.filter(keys, &is_atom/1)

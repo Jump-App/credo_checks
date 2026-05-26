@@ -111,6 +111,35 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssignTest do
     |> refute_issues()
   end
 
+  test "accepts assigns read by helper function patterns" do
+    """
+    defmodule SampleLive do
+      use SampleWeb, :live_view
+
+      def mount(_params, _session, socket) do
+        socket
+        |> assign(:socket_pattern, 1)
+        |> assign(:assigns_binding, 2)
+        |> tap(fn socket ->
+          read_from_socket(socket)
+          read_from_assigns(socket.assigns)
+        end)
+      end
+
+      defp read_from_socket(%{assigns: %{socket_pattern: socket_pattern}}) do
+        socket_pattern
+      end
+
+      defp read_from_assigns(%{assigns_binding: assigns_binding} = _assigns) do
+        assigns_binding
+      end
+    end
+    """
+    |> to_source_file()
+    |> run_check(UnusedLiveViewAssign)
+    |> refute_issues()
+  end
+
   test "reports literal assigns that are never read" do
     """
     defmodule SampleLive do

@@ -26,35 +26,38 @@ defmodule Jump.CredoChecks.AvoidSocketAssignsInTest do
   def run(%SourceFile{filename: filename} = source_file, params \\ []) do
     issue_meta = IssueMeta.for(source_file, params)
 
-    if String.ends_with?(filename, "_test.exs") do
-      Credo.Code.prewalk(source_file, &traverse(&1, &2, issue_meta))
+    with true <- String.ends_with?(filename, "_test.exs"),
+         issues when issues != [] <- Credo.Code.prewalk(source_file, &traverse(&1, &2, issue_meta)),
+         false <- plug_test_module?(issue_meta) do
+      Enum.reject(issues, &plug_test?(issue_meta, &1.line_no))
     else
-      []
+      _ -> []
     end
   end
 
   # var.assigns.field — e.g. socket.assigns.foo, result_socket.assigns.bar
   defp traverse({{:., meta, [{{:., _, [{var_name, _, _}, :assigns]}, _, _}, _field]}, _, _} = ast, issues, issue_meta)
        when is_atom(var_name) and var_name != :conn do
-    maybe_add_issue(ast, meta, issues, issue_meta, "socket.assigns")
+    add_issue(ast, meta, issues, issue_meta, "socket.assigns")
   end
 
   # var.assigns standalone — e.g. Map.has_key?(socket.assigns, :key)
   defp traverse({{:., meta, [{var_name, _, _}, :assigns]}, _, _} = ast, issues, issue_meta)
        when is_atom(var_name) and var_name != :conn do
-    maybe_add_issue(ast, meta, issues, issue_meta, "socket.assigns")
+    add_issue(ast, meta, issues, issue_meta, "socket.assigns")
+  end
+
+  # expr.socket.assigns — e.g. :sys.get_state(view.pid).socket.assigns
+  defp traverse({{:., meta, [{{:., _, [_inner, :socket]}, _, _}, :assigns]}, _, _} = ast, issues, issue_meta) do
+    add_issue(ast, meta, issues, issue_meta, "socket.assigns")
   end
 
   defp traverse(node, issues, _issue_meta) do
     {node, issues}
   end
 
-  defp maybe_add_issue(ast, meta, issues, issue_meta, trigger) do
-    if plug_test_module?(issue_meta) or plug_test?(issue_meta, meta[:line]) do
-      {nil, issues}
-    else
-      {nil, [create_issue(issue_meta, Macro.to_string(ast), meta[:line], trigger) | issues]}
-    end
+  defp add_issue(ast, meta, issues, issue_meta, trigger) do
+    {nil, [create_issue(issue_meta, Macro.to_string(ast), meta[:line], trigger) | issues]}
   end
 
   defp plug_test_module?({_, %SourceFile{} = source_file, _}) do

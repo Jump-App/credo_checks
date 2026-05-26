@@ -37,6 +37,23 @@ defmodule Jump.CredoChecks.AvoidSocketAssignsInTestsTest do
     end)
   end
 
+  test "alerts on function calls that introspect assigns" do
+    """
+    defmodule MyTest do
+      use Jump.DataCase, async: true
+
+      test "checks assigns" do
+        assigns = :sys.get_state(view.pid).socket.assigns
+      end
+    end
+    """
+    |> to_source_file("test/my_test.exs")
+    |> run_check(AvoidSocketAssignsInTest)
+    |> assert_issue(fn issue ->
+      assert issue.message =~ "socket.assigns"
+    end)
+  end
+
   test "alerts on Map.has_key?(socket.assigns, :key)" do
     """
     defmodule MyTest do

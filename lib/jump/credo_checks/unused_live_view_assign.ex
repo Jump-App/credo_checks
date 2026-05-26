@@ -21,18 +21,20 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
       Conventions and limitations:
 
       - Helper functions should read the assigns map through a variable named
-        `assigns` or through `socket.assigns`. Reads like `opts.foo` are not
-        inferred to mean LiveView assigns.
+        `assigns` or through `socket.assigns`. If you bind assigns to another
+        name (like `%{assigns: opts} = socket`, followed by using
+        `opts.my_attr`), the reads will not be recognized as being related
+        to LiveView assigns.
       - Only literal writes via `assign`, `assign_new`, `assign_async`,
         `allow_upload`, `stream`, `stream_async`, and `update` are checked.
-      - Dynamic assign keys are not tracked. Examples include
+      - Writes to dynamic assign keys are not tracked. Examples include
         `assign(socket, field, value)`, `socket.assigns[field]`, and
         `Map.get(assigns, field)`.
       - `Phoenix.Component.assigns_to_attributes/2` is not treated as a read.
         Prefer explicit `attr` declarations and `attr :rest, :global` for
         forwarded attributes.
       - Some assigns are intended to be consumed by framework or layout code
-        outside the current LiveView module. Use `ignored_assigns` to whitelist
+        outside the current LiveView module. Use `ignored_assigns` to allowlist
         those keys.
       """,
       params: [
@@ -245,8 +247,18 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     [key]
   end
 
-  defp read_keys({{:., _dot_meta, [access, :get]}, _call_meta, [assigns_ast, key]}) when is_atom(key) do
-    if access?(access) and assigns_ast?(assigns_ast), do: [key], else: []
+  defp read_keys({{:., _dot_meta, [{:__aliases__, _, [:Access]}, :get]}, _call_meta, [assigns_ast, key]})
+       when is_atom(key) do
+    if assigns_ast?(assigns_ast), do: [key], else: []
+  end
+
+  defp read_keys({{:., _dot_meta, [Access, :get]}, _call_meta, [assigns_ast, key]}) when is_atom(key) do
+    if assigns_ast?(assigns_ast), do: [key], else: []
+  end
+
+  defp read_keys({{:., _dot_meta, [{:__aliases__, _, [:Map]}, function_name]}, _call_meta, [assigns_ast, key | _rest]})
+       when function_name in @map_read_functions do
+    if assigns_ast?(assigns_ast), do: literal_keys(key), else: []
   end
 
   defp read_keys({:=, _meta, [map_pattern, assigns_ast]}) do
@@ -260,28 +272,11 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     end)
   end
 
-  defp read_keys({{:., _dot_meta, [{:__aliases__, _, [:Map]}, function_name]}, _call_meta, [assigns_ast, key | _rest]})
-       when function_name in @map_read_functions do
-    if assigns_ast?(assigns_ast) do
-      literal_keys(key)
-    else
-      []
-    end
-  end
-
-  defp read_keys({{:., _dot_meta, [{:__aliases__, _, [:Map]}, :take]}, _call_meta, [assigns_ast, keys]}) do
-    if assigns_ast?(assigns_ast), do: literal_keys(keys), else: []
-  end
-
   defp read_keys(_call), do: []
 
   defp assigns_ast?({:assigns, _meta, nil}), do: true
   defp assigns_ast?({{:., _dot_meta, [{_socket_name, _, _}, :assigns]}, _call_meta, args}), do: args in [[], nil]
   defp assigns_ast?(_ast), do: false
-
-  defp access?({:__aliases__, _, [:Access]}), do: true
-  defp access?(Access), do: true
-  defp access?(_access), do: false
 
   defp literal_keys(key) when is_atom(key), do: [key]
   defp literal_keys(keys) when is_list(keys), do: Enum.filter(keys, &is_atom/1)

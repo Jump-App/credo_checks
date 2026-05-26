@@ -68,6 +68,29 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssignTest do
     |> refute_issues()
   end
 
+  test "accepts literal assigns read through map and access helpers" do
+    """
+    defmodule SampleLive do
+      use SampleWeb, :live_view
+
+      def mount(_params, _session, socket) do
+        socket
+        |> assign(:map_get, 123)
+        |> assign(:access_by_module, 456)
+        |> assign(:access_by_bracket, 789)
+        |> tap(fn socket ->
+          Map.get(socket.assigns, :map_get)
+          Access.get(socket.assigns, :access_by_module)
+          socket.assigns[:access_by_bracket]
+        end)
+      end
+    end
+    """
+    |> to_source_file()
+    |> run_check(UnusedLiveViewAssign)
+    |> refute_issues()
+  end
+
   test "accepts assigns read by pattern matching socket assigns" do
     """
     defmodule SampleLive do

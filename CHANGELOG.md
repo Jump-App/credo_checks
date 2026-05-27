@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.0
+
+* New check: Add `Jump.CredoChecks.ConditionalAssertion`, which flags assertions that include an "or." Tests should be able to confidently assert which branch will be taken every time.
+
 ## v0.3.0
 
 * New check: Add `Jump.CredoChecks.UnusedLiveViewAssign`, compliments of first-time contributor @ftes ([PR](https://github.com/Jump-App/credo_checks/pull/9))

@@ -71,6 +71,7 @@
           {Jump.CredoChecks.AvoidLoggerConfigureInTest, []},
           # Default exclusion list is empty
           {Jump.CredoChecks.AvoidSocketAssignsInTest, excluded: ["test/app_web/plugs/"]},
+          {Jump.CredoChecks.ConditionalAssertion, []},
           {Jump.CredoChecks.DoctestIExExamples,
            [
              # Tells Credo where to look for the `doctest` call.
@@ -87,12 +88,14 @@
              {:erlang, :binary_to_term, "Use Plug.Crypto.non_executable_binary_to_term/2 instead."}
            ]},
           {Jump.CredoChecks.LiveViewFormCanBeRehydrated, excluded: ["lib/my_app/"]},
+          {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},
           # Default start_after is "0"
           {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},
           {Jump.CredoChecks.TestHasNoAssertions, custom_assertion_functions: [:await_has, :await_with_timeout]},
           # Default max_assertions is 20
           {Jump.CredoChecks.TooManyAssertions, [max_assertions: 20]},
           {Jump.CredoChecks.TopLevelAliasImportRequire, []},
+          {Jump.CredoChecks.UnusedLiveViewAssign, [ignored_assigns: [:active_path]]},
           {Jump.CredoChecks.UseObanProWorker, []},
           {Jump.CredoChecks.VacuousTest,
            [

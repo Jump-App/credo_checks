@@ -16,6 +16,7 @@ It's helpful if they can also point you to a specific place in the codebase wher
 3. You should always write the tests first (at `test/jump/credo_checks/*_test.exs`); test-driven development is by far the superior way to work with this stuff.
 4. Feel free to add temporary debugging output (`IO.inspect`, `dbg`, etc.) to the check and repeatedly rerun the tests to figure out what the AST looks like in the cases you care about.
 5. When your tests are all passing, add the check to the list of custom configured checks in @.credo.exs and run the `mix credo` task. The command should produce no warnings; if it does, ask the user how to proceed.
+6. Update the README (both in the "Available Checks" and "Installation and configuration" sections), and add the new check to the CHANGELOG for the next release
 
 # References
 

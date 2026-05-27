@@ -32,6 +32,7 @@ See the individual modules for detailed descriptions of each check type.
     ```
 - `Jump.CredoChecks.AvoidLoggerConfigureInTest`: Ensure your tests don't call `Logger.configure/1` and thereby affect log levels for other tests.
 - `Jump.CredoChecks.AvoidSocketAssignsInTest`: Ensure that tests assert on expected user behavior rather than introspecting socket `assigns`.
+- `Jump.CredoChecks.ConditionalAssertion`: Flags assertions that include an "or," like `assert foo == :bar or baz == :bop` or `assert foo > 0 || bop > 0`.
 - `Jump.CredoChecks.DoctestIExExamples`: Ensures that modules with interactive Elixir examples in their docstrings have a corresponding test file that runs those doctests.
 - `Jump.CredoChecks.ForbiddenFunction`: Alerts with a custom error message when particular functions are called.
 - `Jump.CredoChecks.LiveViewFormCanBeRehydrated`: Ensures any form with a `phx-submit` attribute also includes an ID and `phx-change` handler. Without these, LiveView can't maintain frontend form state across deploys/reconnects, leading to the form being totally reset.
@@ -107,6 +108,7 @@ The following instructions assume you already have Credo configured and working 
               {Jump.CredoChecks.AvoidLoggerConfigureInTest, []},
               # Default exclusion list is empty
               {Jump.CredoChecks.AvoidSocketAssignsInTest, excluded: ["test/app_web/plugs/"]},
+              {Jump.CredoChecks.ConditionalAssertion, []},
               {Jump.CredoChecks.DoctestIExExamples, [
                 # Tells Credo where to look for the `doctest` call.
                 # If you colocate your test files with your implementation, this would just

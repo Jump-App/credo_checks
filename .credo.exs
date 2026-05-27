@@ -67,6 +67,9 @@
       checks: %{
         enabled: [
           {Jump.CredoChecks.AssertElementSelectorCanNeverFail, []},
+          # Default min_assert_receive_timeout and max_refute_receive_timeout are both nil
+          # (any explicit assert_receive timeout is flagged; refute_receive timeouts are not checked)
+          {Jump.CredoChecks.AssertReceiveTimeout, min_assert_receive_timeout: 1_000, max_refute_receive_timeout: 100},
           {Jump.CredoChecks.AvoidFunctionLevelElse, []},
           {Jump.CredoChecks.AvoidLoggerConfigureInTest, []},
           # Default exclusion list is empty

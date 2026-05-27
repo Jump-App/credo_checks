@@ -11,6 +11,9 @@ These are checks used internally by [Jump](https://jump.ai/)'s engineering team,
 See the individual modules for detailed descriptions of each check type.
 
 - `Jump.CredoChecks.AssertElementSelectorCanNeverFail`: Prevents asserting on a `LiveViewTest.element/{2,3}` call, which can never fail since the function always returns a (possibly empty) list.
+- `Jump.CredoChecks.AssertReceiveTimeout`: Flags `assert_receive` calls that specify explicit timeouts. These timeouts can seem like a fine idea in dev, but when your test later runs on a dog-slow CI machine, the tight timeouts can cause flakiness. (In CI, you might run with an absurdly long timeout to avoid flakiness.)
+    - Supports an optional `min_assert_receive_timeout` parameter that allows literal `assert_receive` timeouts greater than or equal to the configured minimum
+    - Also supports an optional `max_refute_receive_timeout` parameter that flags `refute_receive` calls whose timeout exceeds the configured maximum (because `refute_receive` always blocks for its full timeout, setting a lower bound on the test's runtime)
 - `Jump.CredoChecks.AvoidFunctionLevelElse`: Prevents botched refactors or rebases from introducing `else` clauses at the top level of a function body.
 
     ```elixir
@@ -104,6 +107,16 @@ The following instructions assume you already have Credo configured and working 
           checks: %{
             enabled: [
               {Jump.CredoChecks.AssertElementSelectorCanNeverFail, []},
+              # Default min_assert_receive_timeout and max_refute_receive_timeout are both nil
+              # (any explicit assert_receive timeout is flagged; refute_receive timeouts are not checked).
+              # - Set min_assert_receive_timeout to allow explicit assert_receive timeouts that are
+              #   integer literals >= the configured value.
+              # - Set max_refute_receive_timeout to flag refute_receive calls with timeouts longer than
+              #   the configured value. Because refute_receive always blocks for its full timeout, a long
+              #   refute_receive sets a lower bound on how long the entire test takes to run.
+              {Jump.CredoChecks.AssertReceiveTimeout,
+                min_assert_receive_timeout: 1_000,
+                max_refute_receive_timeout: 100},
               {Jump.CredoChecks.AvoidFunctionLevelElse, []},
               {Jump.CredoChecks.AvoidLoggerConfigureInTest, []},
               # Default exclusion list is empty

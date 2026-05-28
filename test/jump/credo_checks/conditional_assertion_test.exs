@@ -36,7 +36,9 @@ defmodule Jump.CredoChecks.ConditionalAssertionTest do
               "||"
             end
 
-          assert issue.message =~ "Asserting on a conditional (`#{expected_operator}`) indicates a lack of clarity about the expected behavior."
+          assert issue.message =~
+                   "Asserting on a conditional (`#{expected_operator}`) indicates a lack of clarity about the expected behavior."
+
           assert issue.message =~ "Assert the specific value you expect."
         end)
       end

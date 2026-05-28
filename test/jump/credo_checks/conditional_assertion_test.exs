@@ -29,7 +29,17 @@ defmodule Jump.CredoChecks.ConditionalAssertionTest do
         |> to_source_file()
         |> run_check(ConditionalAssertion)
         |> assert_issue(fn issue ->
-          assert issue.message =~ "deterministic"
+          expected_operator =
+            if assertion =~ "or" do
+              "or"
+            else
+              "||"
+            end
+
+          assert issue.message =~
+                   "Asserting on a conditional (`#{expected_operator}`) indicates a lack of clarity about the expected behavior."
+
+          assert issue.message =~ "Assert the specific value you expect."
         end)
       end
     end

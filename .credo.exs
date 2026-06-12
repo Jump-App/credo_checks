@@ -94,6 +94,7 @@
           {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},
           # Default start_after is "0"
           {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},
+          {Jump.CredoChecks.SafeBinaryToTerm, []},
           {Jump.CredoChecks.TestHasNoAssertions, custom_assertion_functions: [:await_has, :await_with_timeout]},
           # Default max_assertions is 20
           {Jump.CredoChecks.TooManyAssertions, [max_assertions: 20]},

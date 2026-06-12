@@ -6,6 +6,7 @@
     * `Jump.CredoChecks.AssertReceiveTimeout`, which flags `assert_receive` calls that specify an explicit timeout. Supports an optional `min_assert_receive_timeout` parameter that allows literal `assert_receive` timeouts greater than or equal to the configured minimum, and an optional `max_refute_receive_timeout` parameter that flags `refute_receive` calls whose timeout exceeds the configured maximum. ([PR](https://github.com/Jump-App/credo_checks/pull/16))
     * `Jump.CredoChecks.ConditionalAssertion`, which flags assertions that include an "or." Tests should be able to confidently assert which branch will be taken every time. ([PR](https://github.com/Jump-App/credo_checks/pull/15))
     * `Jump.CredoChecks.UndeclaredExternalResource`, which flags module attributes that read from the file system at compile time (e.g., `File.read!/1`) without declaring an `@external_resource`. Without it, editing the file won't trigger a recompile, leaving stale data baked into the module.
+    * `Jump.CredoChecks.SafeBinaryToTerm`, which flags `Plug.Crypto.non_executable_binary_to_term/2` calls that omit the `:safe` option. Decoding attacker-controlled input without `:safe` interns arbitrary atoms and can exhaust the atom table, crashing the node.
 
 ## v0.3.0
 

@@ -56,6 +56,7 @@ See the individual modules for detailed descriptions of each check type.
     end
     ```
 - `Jump.CredoChecks.PreferTextColumns`: Ensures your Ecto migrations use the `:text` column type, rather than `:string`, since there is no performance difference in modern versions of Postgres, and you almost always want to enforce maximum length at the application level instead.
+- `Jump.CredoChecks.SafeBinaryToTerm`: Ensures `Plug.Crypto.non_executable_binary_to_term/2` is always called with the `:safe` option. Without it, decoding attacker-controlled input interns arbitrary atoms into the BEAM's fixed, never-garbage-collected atom table, which an attacker can exhaust to crash the node. Matches qualified, aliased, imported, and piped calls.
 - `Jump.CredoChecks.TestHasNoAssertions`: Alerts on ExUnit `test` blocks that contain no assertions.
 - `Jump.CredoChecks.TooManyAssertions`: Flags tests that make an excessive number of assertions, generally indicating a test that conflates multiple concerns. Defaults to 20 asserts at max.
 - `Jump.CredoChecks.TopLevelAliasImportRequire`: Ensures `alias`, `import`, and `require` statements occur only at the top level of a module, rather than within a function.
@@ -157,6 +158,8 @@ The following instructions assume you already have Credo configured and working 
               # Default start_after is "0"
               {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},
               {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},
+              # Exclude files that intentionally decode fully-trusted (never attacker-controlled) input
+              {Jump.CredoChecks.SafeBinaryToTerm, files: %{excluded: ["lib/my_app/trusted_decoder.ex"]}},
               {Jump.CredoChecks.TestHasNoAssertions, custom_assertion_functions: [:await_has, :await_with_timeout]},
               # Default max_assertions is 20
               {Jump.CredoChecks.TooManyAssertions, [max_assertions: 20]},

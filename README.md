@@ -39,6 +39,22 @@ See the individual modules for detailed descriptions of each check type.
 - `Jump.CredoChecks.DoctestIExExamples`: Ensures that modules with interactive Elixir examples in their docstrings have a corresponding test file that runs those doctests.
 - `Jump.CredoChecks.ForbiddenFunction`: Alerts with a custom error message when particular functions are called.
 - `Jump.CredoChecks.LiveViewFormCanBeRehydrated`: Ensures any form with a `phx-submit` attribute also includes an ID and `phx-change` handler. Without these, LiveView can't maintain frontend form state across deploys/reconnects, leading to the form being totally reset.
+- `Jump.CredoChecks.UndeclaredExternalResource`: Ensures modules that read from the file system at compile time (e.g., `File.read!/1` in a module attribute) declare a corresponding `@external_resource` so that editing the file on disk triggers a recompile.
+
+    ```elixir
+    # ❌ Bad — editing prompt.md won't recompile this module
+    defmodule MyApp.ReadsFromDisk do
+      @prompt_path "priv/data/prompt.md"
+      @prompt File.read!(@prompt_path)
+    end
+
+    # ✅ Good: changes made to prompt.md cause MyApp.ReadsFromDisk to recompile
+    defmodule MyApp.ReadsFromDisk do
+      @prompt_path "priv/data/prompt.md"
+      @external_resource @prompt_path
+      @prompt File.read!(@prompt_path)
+    end
+    ```
 - `Jump.CredoChecks.PreferTextColumns`: Ensures your Ecto migrations use the `:text` column type, rather than `:string`, since there is no performance difference in modern versions of Postgres, and you almost always want to enforce maximum length at the application level instead.
 - `Jump.CredoChecks.TestHasNoAssertions`: Alerts on ExUnit `test` blocks that contain no assertions.
 - `Jump.CredoChecks.TooManyAssertions`: Flags tests that make an excessive number of assertions, generally indicating a test that conflates multiple concerns. Defaults to 20 asserts at max.
@@ -137,6 +153,7 @@ The following instructions assume you already have Credo configured and working 
                  {:erlang, :binary_to_term, "Use Plug.Crypto.non_executable_binary_to_term/2 instead."},
                ]},
               {Jump.CredoChecks.LiveViewFormCanBeRehydrated, excluded: ["lib/my_app/"]},
+              {Jump.CredoChecks.UndeclaredExternalResource, []},
               # Default start_after is "0"
               {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},
               {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},

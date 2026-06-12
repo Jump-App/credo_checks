@@ -98,6 +98,7 @@
           # Default max_assertions is 20
           {Jump.CredoChecks.TooManyAssertions, [max_assertions: 20]},
           {Jump.CredoChecks.TopLevelAliasImportRequire, []},
+          {Jump.CredoChecks.UndeclaredExternalResource, []},
           {Jump.CredoChecks.UnusedLiveViewAssign, [ignored_assigns: [:active_path]]},
           {Jump.CredoChecks.UseObanProWorker, []},
           {Jump.CredoChecks.VacuousTest,

@@ -280,6 +280,38 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssignTest do
     |> refute_issues()
   end
 
+  test "flags unused async assigns" do
+    """
+    defmodule SampleLive do
+      use SampleWeb, :live_view
+
+      def mount(_params, _session, socket) do
+        assign_async(socket, :unused, fn -> [1, 2, 3] end)
+      end
+    end
+    """
+    |> to_source_file()
+    |> run_check(UnusedLiveViewAssign)
+    |> assert_issue()
+  end
+
+  test "supports custom assign functions" do
+    """
+    defmodule SampleLive do
+      use SampleWeb, :live_view
+
+      def mount(_params, _session, socket) do
+        socket
+        |> assigner_1(:unused_1, fn -> [4, 5, 6] end)
+        |> Foo.Bar.assigner_2(:unused_2, fn -> [4, 5, 6] end)
+      end
+    end
+    """
+    |> to_source_file()
+    |> run_check(UnusedLiveViewAssign, custom_assign_functions: [{:assigner_1, 3}, {Foo.Bar, :assigner_2, 3}])
+    |> assert_issues(2)
+  end
+
   test "accepts assign_async calls with opts" do
     """
     defmodule SampleLive do

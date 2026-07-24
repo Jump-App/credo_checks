@@ -6,7 +6,8 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     category: :warning,
     param_defaults: [
       excluded: [],
-      ignored_assigns: [:page_title]
+      ignored_assigns: [:page_title],
+      custom_assign_functions: []
     ],
     explanations: [
       check: """
@@ -26,7 +27,9 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
         `opts.my_attr`), the reads will not be recognized as being related
         to LiveView assigns.
       - Only literal writes via `assign`, `assign_new`, `assign_async`,
-        `allow_upload`, `stream`, `stream_async`, and `update` are checked.
+        `allow_upload`, `stream`, `stream_async`, and `update` are checked
+        by default. Use `custom_assign_functions` to also track project-specific
+        helpers that write assigns.
       - Writes to dynamic assign keys are not tracked. Examples include
         `assign(socket, field, value)`, `socket.assigns[field]`, and
         `Map.get(assigns, field)`.
@@ -49,6 +52,27 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
 
             {Jump.CredoChecks.UnusedLiveViewAssign,
              ignored_assigns: [:active_path]}
+        """,
+        custom_assign_functions: """
+        Additional functions that write LiveView assigns. Each entry is either
+        `{function, arity}` for local/imported calls or `{module, function, arity}`
+        for qualified calls.
+
+        The assign key is expected to be the second argument (as it is in `Phoenix.Component.assign/3`).
+
+        Example:
+
+            {Jump.CredoChecks.UnusedLiveViewAssign,
+             custom_assign_functions: [
+               {:assign_current_user, 3},
+               {MyApp.LiveHelpers, :assign_tenant, 3}
+             ]}
+
+        ...would match the following calls:
+
+            socket
+            |> MyApp.LiveHelpers.assign_tenant(:tenant, tenant)
+            |> assign_current_user(:user, user)
         """
       ]
     ]
@@ -64,9 +88,10 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     if String.ends_with?(filename, ".ex") and live_view_source?(source_file) and not exclude_path?(filename, params) do
       issue_meta = IssueMeta.for(source_file, params)
       ignored_assigns = ignored_assigns(params)
+      custom_assign_functions = custom_assign_functions(params)
 
       source_file
-      |> collect_usage()
+      |> collect_usage(custom_assign_functions)
       |> issues_for_unused_writes(issue_meta, ignored_assigns)
     else
       []
@@ -92,24 +117,24 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     |> elem(1)
   end
 
-  defp collect_usage(%SourceFile{} = source_file) do
+  defp collect_usage(%SourceFile{} = source_file, custom_assign_functions) do
     ast = SourceFile.ast(source_file)
 
     state =
       ast
-      |> collect_ast_usage(%{writes: %{}, reads: MapSet.new()})
+      |> collect_ast_usage(%{writes: %{}, reads: MapSet.new()}, custom_assign_functions)
       |> collect_heex_sigils(ast)
       |> collect_heex_files(source_file.filename, ast)
 
     %{state | reads: MapSet.delete(state.reads, nil)}
   end
 
-  defp collect_ast_usage(ast, state) do
+  defp collect_ast_usage(ast, state, custom_assign_functions) do
     ast
     |> Macro.prewalk(state, fn node, acc ->
       acc =
         acc
-        |> collect_write(node)
+        |> collect_write(node, custom_assign_functions)
         |> collect_read(node)
 
       {node, acc}
@@ -117,20 +142,29 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     |> elem(1)
   end
 
-  defp collect_write(state, {:|>, _pipe_meta, [_lhs, call]}) do
-    collect_call_write(state, call, :piped)
+  defp collect_write(state, {:|>, _pipe_meta, [_lhs, call]}, custom_assign_functions) do
+    collect_call_write(state, call, :piped, custom_assign_functions)
   end
 
-  defp collect_write(state, call) do
-    collect_call_write(state, call, :direct)
+  defp collect_write(state, call, custom_assign_functions) do
+    collect_call_write(state, call, :direct, custom_assign_functions)
   end
 
-  defp collect_call_write(state, call, style) do
+  defp collect_call_write(state, call, style, custom_assign_functions) do
     case call_parts(call) do
-      {function_name, meta, args} when function_name in @assign_write_functions ->
+      {_module, function_name, meta, args} when function_name in @assign_write_functions ->
         Enum.reduce(write_keys(function_name, args, style), state, fn key, acc ->
           put_write(acc, key, meta[:line])
         end)
+
+      {module, function_name, meta, args} ->
+        if custom_assign_match?(custom_assign_functions, module, function_name, length(args), style) do
+          Enum.reduce(custom_write_keys(args, style), state, fn key, acc ->
+            put_write(acc, key, meta[:line])
+          end)
+        else
+          state
+        end
 
       _ ->
         state
@@ -200,6 +234,25 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
   defp write_keys(:update, [key, _value], :piped), do: literal_keys(key)
 
   defp write_keys(_function_name, _args, _style), do: []
+
+  defp custom_write_keys([_target, key | _rest], :direct), do: literal_keys(key)
+  defp custom_write_keys([key | _rest], :piped), do: literal_keys(key)
+  defp custom_write_keys(_args, _style), do: []
+
+  defp custom_assign_match?(customs, module, function_name, arg_count, style) do
+    expected_arity = if style == :piped, do: arg_count + 1, else: arg_count
+
+    Enum.any?(customs, fn
+      {^function_name, arity} when is_nil(module) and is_integer(arity) ->
+        arity == expected_arity
+
+      {^module, ^function_name, arity} when not is_nil(module) and is_integer(arity) ->
+        arity == expected_arity
+
+      _ ->
+        false
+    end)
+  end
 
   defp assign_target?({name, _meta, context}) when name in [:assigns, :socket] and is_atom(context), do: true
   defp assign_target?({{:., _dot_meta, [_left, :assigns]}, _call_meta, args}), do: args in [[], nil]
@@ -297,12 +350,21 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
   defp map_pattern_keys(_pattern), do: []
 
   defp call_parts({function_name, meta, args}) when is_atom(function_name) and is_list(args) do
-    {function_name, meta, args}
+    {nil, function_name, meta, args}
   end
 
-  defp call_parts({{:., meta, [_module, function_name]}, _call_meta, args})
-       when is_atom(function_name) and is_list(args) do
-    {function_name, meta, args}
+  defp call_parts({{:., meta, [{:__aliases__, _, module_parts}, function_name]}, _call_meta, args})
+       when is_atom(function_name) and is_list(args) and is_list(module_parts) do
+    if Enum.all?(module_parts, &is_atom/1) do
+      {Module.concat(module_parts), function_name, meta, args}
+    else
+      :error
+    end
+  end
+
+  defp call_parts({{:., meta, [module, function_name]}, _call_meta, args})
+       when is_atom(module) and is_atom(function_name) and is_list(args) do
+    {module, function_name, meta, args}
   end
 
   defp call_parts(_node), do: :error
@@ -428,5 +490,11 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     |> Params.get(:ignored_assigns, __MODULE__)
     |> MapSet.new()
     |> MapSet.put(:page_title)
+  end
+
+  defp custom_assign_functions(params) do
+    params
+    |> Params.get(:custom_assign_functions, __MODULE__)
+    |> List.wrap()
   end
 end

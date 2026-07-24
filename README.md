@@ -39,6 +39,7 @@ See the individual modules for detailed descriptions of each check type.
 - `Jump.CredoChecks.DoctestIExExamples`: Ensures that modules with interactive Elixir examples in their docstrings have a corresponding test file that runs those doctests.
 - `Jump.CredoChecks.ForbiddenFunction`: Alerts with a custom error message when particular functions are called.
 - `Jump.CredoChecks.LiveViewFormCanBeRehydrated`: Ensures any form with a `phx-submit` attribute also includes an ID and `phx-change` handler. Without these, LiveView can't maintain frontend form state across deploys/reconnects, leading to the form being totally reset.
+- `Jump.CredoChecks.NoManualContentDisposition`: Ensures you use `Phoenix.Controller.send_download/3` rather than of manually setting `content-disposition`. This provides a backstop against accidentally failing to properly sanitize filenames in response headers (a potential security vulnerability).
 - `Jump.CredoChecks.UndeclaredExternalResource`: Ensures modules that read from the file system at compile time (e.g., `File.read!/1` in a module attribute) declare a corresponding `@external_resource` so that editing the file on disk triggers a recompile.
 
     ```elixir
@@ -154,6 +155,7 @@ The following instructions assume you already have Credo configured and working 
                  {:erlang, :binary_to_term, "Use Plug.Crypto.non_executable_binary_to_term/2 instead."},
                ]},
               {Jump.CredoChecks.LiveViewFormCanBeRehydrated, excluded: ["lib/my_app/"]},
+              {Jump.CredoChecks.NoManualContentDisposition, []},
               {Jump.CredoChecks.UndeclaredExternalResource, []},
               # Default start_after is "0"
               {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},
@@ -164,7 +166,15 @@ The following instructions assume you already have Credo configured and working 
               # Default max_assertions is 20
               {Jump.CredoChecks.TooManyAssertions, [max_assertions: 20]},
               {Jump.CredoChecks.TopLevelAliasImportRequire, []},
-              {Jump.CredoChecks.UnusedLiveViewAssign, [ignored_assigns: [:active_path]]},
+              {Jump.CredoChecks.UnusedLiveViewAssign,
+               [
+                 ignored_assigns: [:active_path],
+                 # Optional helpers that write assigns like Phoenix.Component.assign/3
+                 custom_assign_functions: [
+                   {:assign_current_user, 3},
+                   {MyApp.LiveHelpers, :assign_tenant, 3}
+                 ]
+               ]},
               {Jump.CredoChecks.UseObanProWorker, []},
               {Jump.CredoChecks.VacuousTest,
                 [

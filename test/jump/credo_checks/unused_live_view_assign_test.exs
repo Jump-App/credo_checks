@@ -253,6 +253,7 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssignTest do
         |> assign(:used_2, params)
         |> assign(:used_3, params)
         |> assign(:used_4, params)
+        |> assign(:used_5, params)
       end
 
       def handle_event("some_event", params, socket) do
@@ -261,6 +262,7 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssignTest do
         |> read_from_assigns_2()
         |> read_from_assigns_3()
         |> read_from_assigns_4()
+        |> read_from_assigns_5()
       end
 
       defp read_from_assigns_1(%{assigns: assigns}) do
@@ -281,6 +283,53 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssignTest do
 
       defp read_from_assigns_4(%{assigns: assigns}) do
         Map.get(assigns, :used_4, %{})
+      end
+
+      defp read_from_assigns_5(socket) do
+        case Map.get(socket.assigns, :used_5) do
+          :ok -> :ok
+          _ -> :error
+        end
+      end
+    end
+    """
+    |> to_source_file()
+    |> run_check(UnusedLiveViewAssign)
+    |> refute_issues()
+  end
+
+  test "handles `with` matching on socket assigns" do
+    """
+    defmodule SampleLive do
+      use SampleWeb, :live_view
+
+      def mount(_params, _session, socket) do
+        socket
+        |> assign(:used_1, params)
+        |> assign(:used_2, params)
+      end
+
+      def handle_event("some_event", params, socket) do
+        socket
+        |> read_from_assigns_1()
+        |> read_from_assigns_2()
+      end
+
+      defp read_from_assigns_1(socket) do
+        with %{used_1: %AsyncResult{ok?: true, result: data}} <- socket.assigns,
+             true <- not is_nil(data) do
+          :ok
+        else
+          _ -> :error
+        end
+      end
+
+      defp read_from_assigns_2(socket) do
+        with %{used_2: %AsyncResult{ok?: true}} <- socket.assigns do
+          :ok
+        else
+          _ -> :error
+        end
       end
     end
     """

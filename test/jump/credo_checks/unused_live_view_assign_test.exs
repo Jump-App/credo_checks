@@ -242,6 +242,53 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssignTest do
     })
   end
 
+  test "recognizes Map.get/{2,3} calls as reads" do
+    """
+    defmodule SampleLive do
+      use SampleWeb, :live_view
+
+      def mount(params, _session, socket) do
+        socket
+        |> assign(:used_1, params)
+        |> assign(:used_2, params)
+        |> assign(:used_3, params)
+        |> assign(:used_4, params)
+      end
+
+      def handle_event("some_event", params, socket) do
+        socket
+        |> read_from_assigns_1()
+        |> read_from_assigns_2()
+        |> read_from_assigns_3()
+        |> read_from_assigns_4()
+      end
+
+      defp read_from_assigns_1(%{assigns: assigns}) do
+        assigns
+        |> Map.get(:used_1)
+        |> IO.inspect()
+      end
+
+      defp read_from_assigns_2(%{assigns: assigns}) do
+        assigns
+        |> Map.get(:used_2, %{})
+        |> IO.inspect()
+      end
+
+      defp read_from_assigns_3(%{assigns: assigns}) do
+        Map.get(assigns, :used_3)
+      end
+
+      defp read_from_assigns_4(%{assigns: assigns}) do
+        Map.get(assigns, :used_4, %{})
+      end
+    end
+    """
+    |> to_source_file()
+    |> run_check(UnusedLiveViewAssign)
+    |> refute_issues()
+  end
+
   test "does not treat keyword values in piped assign/3 as assign keys" do
     """
     defmodule SampleLive do

@@ -314,6 +314,26 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     if assigns_ast?(assigns_ast), do: literal_keys(key), else: []
   end
 
+  defp read_keys(
+         {:|>, _meta,
+          [assigns_ast, {{:., _dot_meta, [{:__aliases__, _, [:Map]}, function_name]}, _call_meta, [key | _rest]}]}
+       )
+       when function_name in @map_read_functions do
+    if assigns_ast?(assigns_ast), do: literal_keys(key), else: []
+  end
+
+  defp read_keys(
+         {:|>, _meta, [assigns_ast, {{:., _dot_meta, [{:__aliases__, _, [:Access]}, :get]}, _call_meta, [key | _rest]}]}
+       )
+       when is_atom(key) do
+    if assigns_ast?(assigns_ast), do: [key], else: []
+  end
+
+  defp read_keys({:|>, _meta, [assigns_ast, {{:., _dot_meta, [Access, :get]}, _call_meta, [key | _rest]}]})
+       when is_atom(key) do
+    if assigns_ast?(assigns_ast), do: [key], else: []
+  end
+
   defp read_keys({:=, _meta, [map_pattern, assigns_ast]}) do
     if assigns_ast?(assigns_ast) or assigns_binding_ast?(assigns_ast), do: map_pattern_keys(map_pattern), else: []
   end

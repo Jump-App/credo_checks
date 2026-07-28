@@ -338,6 +338,10 @@ defmodule Jump.CredoChecks.UnusedLiveViewAssign do
     if assigns_ast?(assigns_ast) or assigns_binding_ast?(assigns_ast), do: map_pattern_keys(map_pattern), else: []
   end
 
+  defp read_keys({:<-, _meta, [map_pattern, assigns_ast]}) do
+    if assigns_ast?(assigns_ast) or assigns_binding_ast?(assigns_ast), do: map_pattern_keys(map_pattern), else: []
+  end
+
   defp read_keys({:%{}, _meta, pairs}) do
     Enum.flat_map(pairs, fn
       {:assigns, nested_pattern} -> map_pattern_keys(nested_pattern)

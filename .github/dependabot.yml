@@ -1,8 +1,25 @@
 version: 2
 updates:
 - package-ecosystem: mix
+  # Wait a week before picking up a new release, so a compromised or yanked
+  # version is not pulled in the moment it is published.
+  cooldown:
+    default-days: 7
   directory: "/"
   schedule:
     interval: weekly
     time: "12:00"
   open-pull-requests-limit: 10
+
+# Keeps the SHA-pinned `uses:` clauses in .github fresh. Without an updater,
+# hash pinning trades a floating-tag problem for a silently-stale-pin problem.
+- package-ecosystem: github-actions
+  cooldown:
+    default-days: 7
+  directory: "/"
+  schedule:
+    interval: weekly
+  groups:
+    github-actions:
+      patterns: ["*"]
+  open-pull-requests-limit: 3

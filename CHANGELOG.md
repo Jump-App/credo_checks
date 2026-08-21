@@ -3,8 +3,11 @@
 ## v0.5.0
 
 * Added `Jump.CredoChecks.NoManualContentDisposition` check, courtesy of @ftes ([PR](https://github.com/Jump-App/credo_checks/pull/25).
-* Added `Jump.CredoChecks.LiveViewPubSubRequiresConnected`, which flags `Phoenix.PubSub.subscribe/{2,3}` calls (or your custom wrappers) in LiveView `mount/3` that are not wrapped in `if connected?(socket)`.
-* Improvement to `Jump.CredoChecks.UnusedLiveViewAssign`: Add `custom_assign_functions` to track project-specific helpers that write assigns (`{function, arity}` or `{module, function, arity}`).
+* Added `Jump.CredoChecks.LiveViewPubSubRequiresConnected`, which flags `Phoenix.PubSub.subscribe/{2,3}` calls (or your custom wrappers) in LiveView `mount/3` that are not wrapped in `if connected?(socket)`. ([PR](https://github.com/Jump-App/credo_checks/pull/31))
+* Improvements to `Jump.CredoChecks.UnusedLiveViewAssign`: 
+    * Add `custom_assign_functions` to track project-specific helpers that write assigns (`{function, arity}` or `{module, function, arity}`). ([PR](https://github.com/Jump-App/credo_checks/pull/26))
+    * Recognize `with` expression reads of assigns ([PR](https://github.com/Jump-App/credo_checks/pull/29))
+    * Recognize piped `Map.get/{2,3}` as a read ([PR](https://github.com/Jump-App/credo_checks/pull/28))
 
 ## v0.4.0
 

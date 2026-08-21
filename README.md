@@ -39,6 +39,7 @@ See the individual modules for detailed descriptions of each check type.
 - `Jump.CredoChecks.DoctestIExExamples`: Ensures that modules with interactive Elixir examples in their docstrings have a corresponding test file that runs those doctests.
 - `Jump.CredoChecks.ForbiddenFunction`: Alerts with a custom error message when particular functions are called.
 - `Jump.CredoChecks.LiveViewFormCanBeRehydrated`: Ensures any form with a `phx-submit` attribute also includes an ID and `phx-change` handler. Without these, LiveView can't maintain frontend form state across deploys/reconnects, leading to the form being totally reset.
+- `Jump.CredoChecks.LiveViewPubSubRequiresConnected`: Flags `Phoenix.PubSub.subscribe/{2,3}` calls (or your custom wrappers) in LiveView `mount/3` that are not wrapped in `if connected?(socket)`. LiveView mount runs twice (disconnected static render, then websocket), so unguarded subscriptions attach to a process that is about to die.
 - `Jump.CredoChecks.NoManualContentDisposition`: Ensures you use `Phoenix.Controller.send_download/3` rather than of manually setting `content-disposition`. This provides a backstop against accidentally failing to properly sanitize filenames in response headers (a potential security vulnerability).
 - `Jump.CredoChecks.UndeclaredExternalResource`: Ensures modules that read from the file system at compile time (e.g., `File.read!/1` in a module attribute) declare a corresponding `@external_resource` so that editing the file on disk triggers a recompile.
 
@@ -155,6 +156,8 @@ The following instructions assume you already have Credo configured and working 
                  {:erlang, :binary_to_term, "Use Plug.Crypto.non_executable_binary_to_term/2 instead."},
                ]},
               {Jump.CredoChecks.LiveViewFormCanBeRehydrated, excluded: ["lib/my_app/"]},
+              {Jump.CredoChecks.LiveViewPubSubRequiresConnected,
+               custom_pubsub_functions: [{MyAppWeb.PubSub, :subscribe}, {:my_imported_subscribe, 1}]},
               {Jump.CredoChecks.NoManualContentDisposition, []},
               {Jump.CredoChecks.UndeclaredExternalResource, []},
               # Default start_after is "0"

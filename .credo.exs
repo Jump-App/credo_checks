@@ -91,6 +91,7 @@
              {:erlang, :binary_to_term, "Use Plug.Crypto.non_executable_binary_to_term/2 instead."}
            ]},
           {Jump.CredoChecks.LiveViewFormCanBeRehydrated, excluded: ["lib/my_app/"]},
+          {Jump.CredoChecks.LiveViewPubSubRequiresConnected, custom_pubsub_functions: [{MyAppWeb.PubSub, :subscribe}]},
           {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},
           # Default start_after is "0"
           {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},

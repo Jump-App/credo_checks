@@ -56,10 +56,14 @@ defmodule Jump.CredoChecks.UseObanProWorker do
         Defaults to `[Oban.Pro.Worker]`. Replace or extend the list if your
         project wraps Oban Pro in its own worker module(s).
 
-        `use Oban.Worker` is always flagged. `use Oban.Pro.Worker` is flagged
-        when `Oban.Pro.Worker` is not in this list. The check for use of string
-        keys in `process/1` args applies to modules that `use` any entry in
-        this list.
+        Modules named in this list are excluded from the check entirely, so a
+        project wrapper may itself `use Oban.Pro.Worker` (or `use Oban.Worker`)
+        without being flagged.
+
+        `use Oban.Worker` is always flagged in other modules. `use Oban.Pro.Worker`
+        is flagged when `Oban.Pro.Worker` is not in this list. The check for use
+        of string keys in `process/1` args applies to modules that `use` any
+        entry in this list.
 
         Example (allow Oban Pro and a project wrapper):
 
@@ -113,11 +117,27 @@ defmodule Jump.CredoChecks.UseObanProWorker do
     end
   end
 
-  defp traverse({:defmodule, _, [_name, [do: body]]} = ast, issues, issue_meta, supported_modules) do
-    {ast, issues ++ string_key_issues(body, issue_meta, supported_modules)}
+  defp traverse({:defmodule, _, [name, _block]} = ast, issues, issue_meta, supported_modules) do
+    excluded_module? =
+      case name do
+        {:__aliases__, _, [Elixir | parts]} -> parts in supported_modules
+        {:__aliases__, _, parts} -> parts in supported_modules
+        _ -> false
+      end
+
+    if excluded_module? do
+      # Replace the body so prewalk does not visit children of this module.
+      {nil, issues}
+    else
+      body = defmodule_body(ast)
+      {ast, issues ++ string_key_issues(body, issue_meta, supported_modules)}
+    end
   end
 
   defp traverse(ast, issues, _issue_meta, _supported_modules), do: {ast, issues}
+
+  defp defmodule_body({:defmodule, _, [_, [do: body]]}), do: body
+  defp defmodule_body(_), do: nil
 
   defp disallowed_oban_worker?([:Oban, :Worker], _supported_modules), do: true
   defp disallowed_oban_worker?([:Oban, :Pro, :Worker] = parts, supported_modules), do: parts not in supported_modules

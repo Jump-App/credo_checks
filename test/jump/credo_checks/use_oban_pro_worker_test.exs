@@ -639,5 +639,24 @@ defmodule Jump.CredoChecks.UseObanProWorkerTest do
         refute issue.message =~ "args_schema"
       end)
     end
+
+    test "does not alert when a supported wrapper module itself uses Oban" do
+      for module <- [Oban.Pro.Worker, Oban.Worker] do
+        """
+        defmodule MyCustomObanProWorker do
+          use #{module}, queue: :default
+
+          defmacro __using__(opts) do
+            quote do
+              use #{module}, unquote(opts)
+            end
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(UseObanProWorker, @custom_only)
+        |> refute_issues()
+      end
+    end
   end
 end

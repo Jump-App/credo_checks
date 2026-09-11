@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+* Two big improvements to `Jump.CredoChecks.UseObanProWorker`:
+  * Flag `process/1` callbacks that expect string keys in the job args when the worker declares an `args_schema`. (The `args_schema` ensures the worker will only ever be called with atom keys in the args.)
+  * Add `supported_worker_modules` (default: `[Oban.Pro.Worker]`) so project-specific wrappers can be treated as equivalent to `use Oban.Pro.Worker`.
+
 ## v0.5.0
 
 * Added `Jump.CredoChecks.NoManualContentDisposition` check, courtesy of @ftes ([PR](https://github.com/Jump-App/credo_checks/pull/25).

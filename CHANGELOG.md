@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* `Jump.CredoChecks.UndeclaredExternalResource` no longer treats an aliased module bound to the name `File` (`alias MyApp.Files.File`) as Elixir's `File`, so `File.t()` in a `@spec` no longer reports a missing `@external_resource` ([#38](https://github.com/Jump-App/credo_checks/issues/38)).
 * Two big improvements to `Jump.CredoChecks.UseObanProWorker`:
   * Flag `process/1` callbacks that expect string keys in the job args when the worker declares an `args_schema`. (The `args_schema` ensures the worker will only ever be called with atom keys in the args.)
   * Add `supported_worker_modules` (default: `[Oban.Pro.Worker]`) so project-specific wrappers can be treated as equivalent to `use Oban.Pro.Worker`.

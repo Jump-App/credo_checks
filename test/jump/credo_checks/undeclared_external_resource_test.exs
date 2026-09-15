@@ -102,6 +102,71 @@ defmodule Jump.CredoChecks.UndeclaredExternalResourceTest do
     end
   end
 
+  test "alerts on fully-qualified Elixir.File calls even when another module is aliased to File" do
+    """
+    defmodule Foo do
+      alias Some.Files.File
+
+      @prompt Elixir.File.read!("priv/data/prompt.md")
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> assert_issue(fn issue ->
+      assert issue.trigger == "@prompt"
+    end)
+  end
+
+  test "alerts on Erlang :file calls even when another module is aliased to File" do
+    """
+    defmodule Foo do
+      alias Some.Files.File
+
+      @prompt :file.read_file("priv/data/prompt.md")
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> assert_issue(fn issue ->
+      assert issue.trigger == "@prompt"
+    end)
+  end
+
+  test "alerts when only a nested module aliases another module to File" do
+    """
+    defmodule Outer do
+      @outer File.read!("priv/data/outer.md")
+
+      defmodule Inner do
+        alias Some.Files.File
+
+        @spec fetch(File.t()) :: :ok
+        def fetch(_file), do: :ok
+      end
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> assert_issue(fn issue ->
+      assert issue.trigger == "@outer"
+    end)
+  end
+
+  test "alerts when an alias binds a name other than File" do
+    """
+    defmodule Foo do
+      alias Some.Other
+
+      @prompt File.read!("priv/data/prompt.md")
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> assert_issue(fn issue ->
+      assert issue.trigger == "@prompt"
+    end)
+  end
+
   test "alerts once per file-reading attribute" do
     """
     defmodule Foo do
@@ -268,6 +333,61 @@ defmodule Jump.CredoChecks.UndeclaredExternalResourceTest do
     """
     defmodule Foo do
       @config MyApp.File.parse("priv/data/config.txt")
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> refute_issues()
+  end
+
+  test "does not alert on a type of a module aliased to the name File" do
+    """
+    defmodule Foo do
+      alias Some.Files.File
+
+      @spec fetch(File.t()) :: :ok
+      def fetch(_file), do: :ok
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> refute_issues()
+  end
+
+  test "does not alert when a module attribute calls a module aliased to the name File" do
+    """
+    defmodule Foo do
+      alias Some.Files.File
+
+      @config File.parse("priv/data/config.txt")
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> refute_issues()
+  end
+
+  test "does not alert when an `as:` alias binds the name File" do
+    """
+    defmodule Foo do
+      alias Some.Thing, as: File
+
+      @spec fetch(File.t()) :: :ok
+      def fetch(_thing), do: :ok
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> refute_issues()
+  end
+
+  test "does not alert when a multi-alias binds the name File" do
+    """
+    defmodule Foo do
+      alias Some.{File, Other}
+
+      @spec fetch(File.t()) :: Other.t()
+      def fetch(_file), do: :ok
     end
     """
     |> to_source_file()

@@ -72,11 +72,12 @@ defmodule Jump.CredoChecks.UndeclaredExternalResource do
     attrs = attribute_values(body)
     resources = external_resources(body)
     resolved_resources = Enum.map(resources, fn {value, _line} -> resolve(value, attrs) end)
+    file_aliased? = file_aliased?(body)
 
     cond do
       resources == [] ->
         body
-        |> file_dependent_attributes(attrs)
+        |> file_dependent_attributes(attrs, file_aliased?)
         |> Enum.map(fn {name, line, _paths} -> undeclared_issue(name, line, issue_meta) end)
 
       Enum.all?(resolved_resources, &match?({:literal, _}, &1)) ->
@@ -88,7 +89,7 @@ defmodule Jump.CredoChecks.UndeclaredExternalResource do
           Enum.find_value(resources, fn {value, line} -> if is_binary(value), do: line end)
 
         body
-        |> file_dependent_attributes(attrs)
+        |> file_dependent_attributes(attrs, file_aliased?)
         |> Enum.flat_map(fn {name, line, paths} ->
           case paths -- declared_paths do
             [] -> []
@@ -113,6 +114,38 @@ defmodule Jump.CredoChecks.UndeclaredExternalResource do
     end)
     |> Enum.group_by(fn {name, _value} -> name end, fn {_name, value} -> value end)
   end
+
+  # Tells whether the module binds the name `File` to some other module, via
+  # `alias Some.Thing.File`, `alias Some.Thing, as: File`, or `alias Some.{File,
+  # Other}`. When it does, a bare `File.read!/1` no longer means Elixir's `File`.
+  defp file_aliased?(body) do
+    body
+    |> walk_module([], fn
+      {:alias, _meta, args} = node, acc when is_list(args) -> {node, aliased_names(args) ++ acc}
+      node, acc -> {node, acc}
+    end)
+    |> Enum.member?(:File)
+  end
+
+  # Returns the names an `alias` binds in the current scope.
+  defp aliased_names([{:__aliases__, _, parts}]) when is_list(parts), do: [List.last(parts)]
+
+  defp aliased_names([{:__aliases__, _, parts}, opts]) when is_list(parts) and is_list(opts) do
+    case Keyword.get(opts, :as) do
+      {:__aliases__, _, as_parts} when is_list(as_parts) -> [List.last(as_parts)]
+      _ -> [List.last(parts)]
+    end
+  end
+
+  defp aliased_names([{{:., _, [{:__aliases__, _, prefix}, :{}]}, _, nested}])
+       when is_list(prefix) and is_list(nested) do
+    Enum.flat_map(nested, fn
+      {:__aliases__, _, parts} when is_list(parts) -> [List.last(parts)]
+      _ -> []
+    end)
+  end
+
+  defp aliased_names(_args), do: []
 
   # Resolves an expression to {:literal, path} when it's a hard-coded string,
   # a reference to a module attribute holding one, or a Path.join of such
@@ -173,11 +206,11 @@ defmodule Jump.CredoChecks.UndeclaredExternalResource do
     |> Enum.reverse()
   end
 
-  defp file_dependent_attributes(body, attrs) do
+  defp file_dependent_attributes(body, attrs, file_aliased?) do
     body
     |> walk_module([], fn
       {:@, meta, [{name, _, [value]}]} = node, acc when is_atom(name) and name != :external_resource ->
-        case file_call_paths(value, attrs) do
+        case file_call_paths(value, attrs, file_aliased?) do
           :no_file_calls -> {node, acc}
           {:file_calls, paths} -> {node, [{name, meta[:line], paths} | acc]}
         end
@@ -191,11 +224,11 @@ defmodule Jump.CredoChecks.UndeclaredExternalResource do
   # Returns :no_file_calls, or {:file_calls, paths} where paths are the
   # hard-coded string paths passed to the file system calls (dynamically built
   # paths are omitted, since we can't tell what they resolve to).
-  defp file_call_paths(value, attrs) do
+  defp file_call_paths(value, attrs, file_aliased?) do
     value
     |> Macro.prewalk(:no_file_calls, fn
       {{:., _, [{:__aliases__, _, aliases}, _fun]}, _, args} = node, acc
-      when aliases in [[:File], [Elixir, :File]] ->
+      when aliases == [Elixir, :File] or (aliases == [:File] and not file_aliased?) ->
         {node, add_file_call(acc, args, attrs)}
 
       {{:., _, [:file, _fun]}, _, args} = node, acc ->

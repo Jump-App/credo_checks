@@ -14,6 +14,7 @@ See the individual modules for detailed descriptions of each check type.
 - `Jump.CredoChecks.AssertReceiveTimeout`: Flags `assert_receive` calls that specify explicit timeouts. These timeouts can seem like a fine idea in dev, but when your test later runs on a dog-slow CI machine, the tight timeouts can cause flakiness. (In CI, you might run with an absurdly long timeout to avoid flakiness.)
     - Supports an optional `min_assert_receive_timeout` parameter that allows literal `assert_receive` timeouts greater than or equal to the configured minimum
     - Also supports an optional `max_refute_receive_timeout` parameter that flags `refute_receive` calls whose timeout exceeds the configured maximum (because `refute_receive` always blocks for its full timeout, setting a lower bound on the test's runtime)
+    - A timeout held in a module attribute (`@timeout 5_000`) counts as a literal, as long as the attribute is assigned exactly once in the same module and holds an integer literal
 - `Jump.CredoChecks.AvoidFunctionLevelElse`: Prevents botched refactors or rebases from introducing `else` clauses at the top level of a function body.
 
     ```elixir

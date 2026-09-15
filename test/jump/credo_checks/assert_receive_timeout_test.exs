@@ -51,12 +51,12 @@ defmodule Jump.CredoChecks.AssertReceiveTimeoutTest do
       |> assert_issue()
     end
 
-    test "alerts on assert_receive with a variable timeout" do
+    test "alerts on assert_receive with a module attribute timeout" do
       """
       defmodule MyTest do
         @timeout 1_000
 
-        test "with variable timeout" do
+        test "with attribute timeout" do
           assert_receive :foo, @timeout
         end
       end
@@ -152,10 +152,122 @@ defmodule Jump.CredoChecks.AssertReceiveTimeoutTest do
     test "alerts when timeout is a non-literal we cannot statically verify" do
       """
       defmodule MyTest do
-        @timeout 500
-
         test "non-literal timeout cannot be verified" do
-          assert_receive :foo, @timeout
+          timeout = 5_000
+          assert_receive :foo, timeout
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
+      |> assert_issue()
+    end
+
+    test "does not alert when a module attribute holds an integer at or above the minimum" do
+      """
+      defmodule MyTest do
+        @sms_timeout 5_000
+
+        test "attribute timeout above the minimum" do
+          assert_receive {:sms, _}, @sms_timeout
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
+      |> refute_issues()
+    end
+
+    test "does not alert when a module attribute holds an integer and a failure message is given" do
+      """
+      defmodule MyTest do
+        @sms_timeout 5_000
+
+        test "attribute timeout with a failure message" do
+          assert_receive {:sms, _}, @sms_timeout, "no sms"
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
+      |> refute_issues()
+    end
+
+    test "alerts when a module attribute holds an integer below the minimum" do
+      [issue] =
+        """
+        defmodule MyTest do
+          @sms_timeout 500
+
+          test "attribute timeout below the minimum" do
+            assert_receive {:sms, _}, @sms_timeout
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
+
+      assert issue.message =~ "must be a literal integer >= 1000"
+      assert issue.trigger == "@sms_timeout"
+    end
+
+    test "alerts when the module attribute is never assigned" do
+      """
+      defmodule MyTest do
+        test "unassigned attribute" do
+          assert_receive :foo, @sms_timeout
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
+      |> assert_issue()
+    end
+
+    test "alerts when the module attribute is assigned more than once" do
+      """
+      defmodule MyTest do
+        @sms_timeout 5_000
+        @sms_timeout 500
+
+        test "reassigned attribute" do
+          assert_receive :foo, @sms_timeout
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
+      |> assert_issue()
+    end
+
+    test "alerts when the module attribute holds a non-integer" do
+      issues =
+        """
+        defmodule MyTest do
+          @string_timeout "5_000"
+          @computed_timeout System.get_env("TIMEOUT")
+
+          test "non-integer attributes" do
+            assert_receive :foo, @string_timeout
+            assert_receive :bar, @computed_timeout
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
+
+      assert length(issues) == 2
+    end
+
+    test "alerts when the module attribute is assigned in a nested module" do
+      """
+      defmodule MyTest do
+        defmodule Helpers do
+          @sms_timeout 5_000
+        end
+
+        test "attribute from a nested module does not leak" do
+          assert_receive :foo, @sms_timeout
         end
       end
       """
@@ -262,16 +374,48 @@ defmodule Jump.CredoChecks.AssertReceiveTimeoutTest do
     test "alerts when refute_receive timeout is a non-literal we cannot statically verify" do
       """
       defmodule MyTest do
-        @timeout 1_000
-
         test "non-literal refute timeout cannot be verified" do
-          refute_receive :foo, @timeout
+          timeout = 50
+          refute_receive :foo, timeout
         end
       end
       """
       |> to_source_file()
       |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
       |> assert_issue()
+    end
+
+    test "does not alert when a module attribute holds an integer at or below the maximum" do
+      """
+      defmodule MyTest do
+        @refute_timeout 50
+
+        test "attribute refute timeout below the max" do
+          refute_receive :foo, @refute_timeout
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> refute_issues()
+    end
+
+    test "alerts when a module attribute holds an integer above the maximum" do
+      [issue] =
+        """
+        defmodule MyTest do
+          @refute_timeout 1_000
+
+          test "attribute refute timeout above the max" do
+            refute_receive :foo, @refute_timeout
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+
+      assert issue.message =~ "must be a literal integer <= 100"
+      assert issue.trigger == "@refute_timeout"
     end
 
     test "error message references the minimum-bound nature of refute_receive" do

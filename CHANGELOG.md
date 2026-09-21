@@ -7,6 +7,7 @@
 * Two big improvements to `Jump.CredoChecks.UseObanProWorker`:
   * Flag `process/1` callbacks that expect string keys in the job args when the worker declares an `args_schema`. (The `args_schema` ensures the worker will only ever be called with atom keys in the args.)
   * Add `supported_worker_modules` (default: `[Oban.Pro.Worker]`) so project-specific wrappers can be treated as equivalent to `use Oban.Pro.Worker`.
+* `Jump.CredoChecks.AssertReceiveTimeout`'s `max_refute_receive_timeout` now also flags PhoenixTest `refute_has` calls that pass an explicit `:timeout` longer than the configured maximum.
 
 ## v0.5.0
 

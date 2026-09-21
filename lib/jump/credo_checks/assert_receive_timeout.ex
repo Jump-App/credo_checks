@@ -1,7 +1,8 @@
 defmodule Jump.CredoChecks.AssertReceiveTimeout do
   @moduledoc """
-  Flags `assert_receive` calls that specify an explicit timeout, and optionally
-  `refute_receive` calls whose timeout exceeds a configured maximum.
+  Flags `assert_receive` calls that specify an explicit timeout.
+
+  Optionally also flags `refute_receive` and `PhoenixTest.refute_has/3` calls whose timeout exceeds a configured max.
   """
 
   use Credo.Check,
@@ -48,6 +49,22 @@ defmodule Jump.CredoChecks.AssertReceiveTimeout do
       param is set, every `refute_receive` must specify an explicit timeout the check
       can verify is at or below the configured maximum — bare `refute_receive` calls
       are flagged too, since they fall back to a default that also blocks the test.
+
+      The same cap applies to `PhoenixTest.refute_has/3` when it is given an explicit
+      `:timeout` option. Unlike `refute_receive`, PhoenixTest defaults `timeout` to 0
+      (no wait), so a `refute_has` with no timeout is allowed. A positive timeout,
+      though, waits for async LiveView operations and therefore also sets a minimum
+      bound on the test's runtime:
+
+          # ❌ Bad — waits up to 10s to confirm the text is absent
+          session
+          |> visit(~p"/")
+          |> refute_has("Negative text", timeout: 10_000)
+
+          # ✅ Good — omit timeout (defaults to 0) or keep it at or below the max
+          session
+          |> visit(~p"/")
+          |> refute_has("Negative text")
       """,
       params: [
         min_assert_receive_timeout:
@@ -57,8 +74,10 @@ defmodule Jump.CredoChecks.AssertReceiveTimeout do
         max_refute_receive_timeout:
           "If set, flags `refute_receive` calls whose timeout is an integer literal greater than this value, " <>
             "whose timeout cannot be statically verified, or which omit an explicit timeout entirely. " <>
+            "The same cap is applied to PhoenixTest `refute_has` calls that pass an explicit `timeout:` option " <>
+            "(omitting it is allowed, since PhoenixTest defaults to 0). " <>
             "A module attribute assigned exactly once to an integer literal is verified like a literal. " <>
-            "Defaults to `nil` (no `refute_receive` timeout is flagged). As with the built-in timeout type, units are milliseconds."
+            "Defaults to `nil` (no `refute_receive`/`refute_has` timeout is flagged). As with the built-in timeout type, units are milliseconds."
       ]
     ]
 
@@ -157,7 +176,37 @@ defmodule Jump.CredoChecks.AssertReceiveTimeout do
     maybe_add_refute_issue(ast, issues, issue_meta, max_refute, timeout, attrs, meta)
   end
 
+  # PhoenixTest.refute_has(session, selector, opts) and piped/aliased variants.
+  # In a pipe the session argument is absent from `args`, but `timeout:` always
+  # appears in a keyword list among the explicit args — so scanning args works
+  # regardless of pipe or arity.
+  defp traverse({{:., _, [_module, :refute_has]}, meta, args} = ast, issues, issue_meta, attrs, _min_assert, max_refute)
+       when is_list(args) do
+    maybe_add_refute_has_issue(ast, issues, issue_meta, max_refute, timeout_option(args), attrs, meta)
+  end
+
+  # Unqualified refute_has/2,3,4 after `import PhoenixTest`.
+  defp traverse({:refute_has, meta, args} = ast, issues, issue_meta, attrs, _min_assert, max_refute)
+       when is_list(args) do
+    maybe_add_refute_has_issue(ast, issues, issue_meta, max_refute, timeout_option(args), attrs, meta)
+  end
+
   defp traverse(ast, issues, _issue_meta, _attrs, _min_assert, _max_refute), do: {ast, issues}
+
+  # Finds `timeout: value` in any keyword-list argument. Returns `{:ok, value}`
+  # so a present-but-unresolvable timeout is distinct from an omitted one.
+  defp timeout_option(args) do
+    Enum.find_value(args, fn
+      opts when is_list(opts) ->
+        Enum.find_value(opts, fn
+          {:timeout, value} -> {:ok, value}
+          _ -> nil
+        end)
+
+      _ ->
+        nil
+    end)
+  end
 
   defp maybe_add_assert_issue(ast, issues, issue_meta, min_assert, timeout, attrs, meta) do
     if assert_allowed?(resolve_timeout(timeout, attrs), min_assert) do
@@ -174,6 +223,17 @@ defmodule Jump.CredoChecks.AssertReceiveTimeout do
       {ast, issues}
     else
       {ast, [refute_issue_for(issue_meta, max_refute, timeout, meta[:line]) | issues]}
+    end
+  end
+
+  defp maybe_add_refute_has_issue(ast, issues, _issue_meta, nil, _timeout, _attrs, _meta), do: {ast, issues}
+  defp maybe_add_refute_has_issue(ast, issues, _issue_meta, _max_refute, nil, _attrs, _meta), do: {ast, issues}
+
+  defp maybe_add_refute_has_issue(ast, issues, issue_meta, max_refute, {:ok, timeout}, attrs, meta) do
+    if refute_allowed?(resolve_timeout(timeout, attrs), max_refute) do
+      {ast, issues}
+    else
+      {ast, [refute_has_issue_for(issue_meta, max_refute, timeout, meta[:line]) | issues]}
     end
   end
 
@@ -223,6 +283,18 @@ defmodule Jump.CredoChecks.AssertReceiveTimeout do
         "`refute_receive` timeout must be a literal integer <= #{max_refute}. " <>
           "`refute_receive` always blocks for its full timeout, setting a minimum bound on the entire test's runtime, " <>
           "so long `refute_receive` calls slow down the whole test suite.",
+      trigger: Macro.to_string(timeout),
+      line_no: line_no
+    )
+  end
+
+  defp refute_has_issue_for(issue_meta, max_refute, timeout, line_no) do
+    format_issue(
+      issue_meta,
+      message:
+        "`refute_has` timeout must be a literal integer <= #{max_refute}. " <>
+          "`refute_has` with a positive timeout waits for async LiveView operations, setting a minimum bound " <>
+          "on the entire test's runtime, so long `refute_has` calls slow down the whole test suite.",
       trigger: Macro.to_string(timeout),
       line_no: line_no
     )

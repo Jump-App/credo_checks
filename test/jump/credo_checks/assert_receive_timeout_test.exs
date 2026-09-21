@@ -194,21 +194,21 @@ defmodule Jump.CredoChecks.AssertReceiveTimeoutTest do
     end
 
     test "alerts when a module attribute holds an integer below the minimum" do
-      [issue] =
-        """
-        defmodule MyTest do
-          @sms_timeout 500
+      """
+      defmodule MyTest do
+        @sms_timeout 500
 
-          test "attribute timeout below the minimum" do
-            assert_receive {:sms, _}, @sms_timeout
-          end
+        test "attribute timeout below the minimum" do
+          assert_receive {:sms, _}, @sms_timeout
         end
-        """
-        |> to_source_file()
-        |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
-
-      assert issue.message =~ "must be a literal integer >= 1000"
-      assert issue.trigger == "@sms_timeout"
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000)
+      |> assert_issue(fn issue ->
+        assert issue.message =~ "must be a literal integer >= 1000"
+        assert issue.trigger == "@sms_timeout"
+      end)
     end
 
     test "alerts when the module attribute is never assigned" do
@@ -296,6 +296,21 @@ defmodule Jump.CredoChecks.AssertReceiveTimeoutTest do
       defmodule MyTest do
         test "refute without timeout" do
           refute_receive :foo
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout)
+      |> refute_issues()
+    end
+
+    test "does not alert on refute_has with a long timeout" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          session
+          |> visit(~p"/")
+          |> refute_has("Negative text", timeout: 10_000)
         end
       end
       """
@@ -401,38 +416,253 @@ defmodule Jump.CredoChecks.AssertReceiveTimeoutTest do
     end
 
     test "alerts when a module attribute holds an integer above the maximum" do
-      [issue] =
-        """
-        defmodule MyTest do
-          @refute_timeout 1_000
+      """
+      defmodule MyTest do
+        @refute_timeout 1_000
 
-          test "attribute refute timeout above the max" do
-            refute_receive :foo, @refute_timeout
-          end
+        test "attribute refute timeout above the max" do
+          refute_receive :foo, @refute_timeout
         end
-        """
-        |> to_source_file()
-        |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
-
-      assert issue.message =~ "must be a literal integer <= 100"
-      assert issue.trigger == "@refute_timeout"
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue(fn issue ->
+        assert issue.message =~ "must be a literal integer <= 100"
+        assert issue.trigger == "@refute_timeout"
+      end)
     end
 
     test "error message references the minimum-bound nature of refute_receive" do
-      [issue] =
-        """
-        defmodule MyTest do
-          test "long refute timeout" do
-            refute_receive :foo, 1_000
-          end
+      """
+      defmodule MyTest do
+        test "long refute timeout" do
+          refute_receive :foo, 1_000
         end
-        """
-        |> to_source_file()
-        |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue(fn issue ->
+        assert issue.message =~ "refute_receive"
+        assert issue.message =~ "minimum"
+        assert issue.message =~ "slow"
+      end)
+    end
+  end
 
-      assert issue.message =~ "refute_receive"
-      assert issue.message =~ "minimum"
-      assert issue.message =~ "slow"
+  describe "PhoenixTest refute_has with a configured max_refute_receive_timeout" do
+    test "alerts on a piped refute_has with a long timeout" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          session
+          |> visit(~p"/")
+          |> refute_has("Negative text", timeout: 10_000)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue()
+    end
+
+    test "alerts on an unpiped refute_has with a long timeout" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          refute_has(session, "Negative text", timeout: 10_000)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue()
+    end
+
+    test "alerts on refute_has with other options plus a long timeout" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          refute_has(session, "h1", text: "Hello", exact: true, timeout: 10_000)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue()
+    end
+
+    test "alerts on refute_has/4 with a long timeout" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          session
+          |> visit(~p"/")
+          |> refute_has("h1", "Hello", timeout: 10_000)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue()
+    end
+
+    test "alerts on refute_has/4 with a long module attribute timeout" do
+      """
+      defmodule MyTest do
+        @refute_timeout 10_000
+
+        test "phoenix test refute" do
+          session
+          |> visit(~p"/")
+          |> refute_has("h1", "Hello", timeout: @refute_timeout)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue()
+    end
+
+    test "alerts on a qualified PhoenixTest.refute_has with a long timeout" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          PhoenixTest.refute_has(session, "h1", text: "Hello", timeout: 10_000)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue()
+    end
+
+    test "does not alert when refute_has timeout equals the maximum" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          refute_has(session, "h1", timeout: 100)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> refute_issues()
+    end
+
+    test "does not alert when refute_has timeout is below the maximum" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          session
+          |> visit(~p"/")
+          |> refute_has("h1", text: "Hello", timeout: 50)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> refute_issues()
+    end
+
+    test "does not alert when refute_has omits timeout (PhoenixTest defaults to 0)" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          session
+          |> visit(~p"/")
+          |> refute_has("Negative text")
+
+          refute_has(session, "h1", text: "Hello")
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> refute_issues()
+    end
+
+    test "does not alert on assert_has with a long timeout" do
+      """
+      defmodule MyTest do
+        test "phoenix test assert" do
+          session
+          |> visit(~p"/")
+          |> assert_has("Positive text", timeout: 10_000)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> refute_issues()
+    end
+
+    test "alerts when refute_has timeout is a non-literal we can't statically verify" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          timeout = 50
+          refute_has(session, "h1", timeout: timeout)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue()
+    end
+
+    test "does not alert when a module attribute holds an integer at or below the maximum" do
+      """
+      defmodule MyTest do
+        @refute_timeout 50
+
+        test "phoenix test refute" do
+          refute_has(session, "h1", timeout: @refute_timeout)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> refute_issues()
+    end
+
+    test "alerts when a module attribute holds an integer above the maximum" do
+      """
+      defmodule MyTest do
+        @refute_timeout 10_000
+
+        test "phoenix test refute" do
+          session
+          |> visit(~p"/")
+          |> refute_has("Negative text", timeout: @refute_timeout)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue(fn issue ->
+        assert issue.message =~ "refute_has"
+        assert issue.message =~ "must be a literal integer <= 100"
+        assert issue.trigger == "@refute_timeout"
+      end)
+    end
+
+    test "error message references the minimum-bound nature of refute_has" do
+      """
+      defmodule MyTest do
+        test "phoenix test refute" do
+          refute_has(session, "h1", timeout: 10_000)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
+      |> assert_issue(fn issue ->
+        assert issue.message =~ "refute_has"
+        assert issue.message =~ "minimum"
+        assert issue.message =~ "slow"
+      end)
     end
   end
 
@@ -449,6 +679,22 @@ defmodule Jump.CredoChecks.AssertReceiveTimeoutTest do
         """
         |> to_source_file()
         |> run_check(AssertReceiveTimeout, min_assert_receive_timeout: 1_000, max_refute_receive_timeout: 100)
+
+      assert length(issues) == 2
+    end
+
+    test "alerts on a long refute_has together with a long refute_receive" do
+      issues =
+        """
+        defmodule MyTest do
+          test "mixed refutes" do
+            refute_receive :bar, 1_000
+            refute_has(session, "h1", timeout: 10_000)
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AssertReceiveTimeout, max_refute_receive_timeout: 100)
 
       assert length(issues) == 2
     end

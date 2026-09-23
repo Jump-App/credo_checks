@@ -318,18 +318,26 @@ defmodule Jump.CredoChecks.VacuousTest do
   defp library_module?(_, _aliases, _library_modules), do: false
 
   defp collect_aliases(source_file) do
-    Credo.Code.prewalk(
-      source_file,
-      fn
-        {:alias, _, [{:__aliases__, _, module_parts}]} = node, acc
-        when is_list(module_parts) and length(module_parts) > 1 ->
-          short_name = List.last(module_parts)
-          {node, Map.put(acc, short_name, module_parts)}
-
-        node, acc ->
-          {node, acc}
-      end,
-      %{}
-    )
+    Credo.Code.prewalk(source_file, &collect_alias/2, %{})
   end
+
+  # `alias MyApp.Worker, as: Agent` — the call site uses a name that is also
+  # an OTP module. Resolve `as:` so the call counts as the application module.
+  defp collect_alias({:alias, _, [{:__aliases__, _, module_parts}, opts]} = node, acc)
+       when is_list(module_parts) and module_parts != [] and is_list(opts) do
+    case Keyword.get(opts, :as) do
+      {:__aliases__, _, [short_name | _]} when is_atom(short_name) ->
+        {node, Map.put(acc, short_name, module_parts)}
+
+      _ ->
+        {node, acc}
+    end
+  end
+
+  defp collect_alias({:alias, _, [{:__aliases__, _, module_parts}]} = node, acc)
+       when is_list(module_parts) and length(module_parts) > 1 do
+    {node, Map.put(acc, List.last(module_parts), module_parts)}
+  end
+
+  defp collect_alias(node, acc), do: {node, acc}
 end

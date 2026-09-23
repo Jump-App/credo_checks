@@ -53,6 +53,22 @@ defmodule Jump.CredoChecks.VacuousTestTest do
       |> refute_issues()
     end
 
+    test "does not flag cases where `as:` renames a module to a built-in name" do
+      """
+      defmodule MyTest do
+        use ExUnit.Case, async: true
+        alias MyApp.AgentFramework, as: Agent
+
+        test "agent listener" do
+          assert :email in Agent.active_listener_values()
+        end
+      end
+      """
+      |> to_source_file("lib/my_module_test.exs")
+      |> run_check(VacuousTest)
+      |> refute_issues()
+    end
+
     test "does not flag cases where we're testing `use`" do
       """
       test "raises ArgumentError when prefix is missing" do

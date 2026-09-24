@@ -1,0 +1,69 @@
+name: Zizmor
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: Zizmor
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      ZIZMOR_VERSION: "1.29.0"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      # `main` is kept at zero high-severity findings, so a red check means the
+      # finding comes from this PR.
+      #
+      # GH_TOKEN enables the online audits. Without it zizmor runs offline,
+      # skips the known-vulnerable-action and stale-ref lookups, and still
+      # reports green.
+      - name: Audit GitHub Actions workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          uvx "zizmor@${ZIZMOR_VERSION}"
+          --format=github
+          --persona=regular
+          --collect=workflows,actions
+          --min-severity=high
+          .
+
+      - name: Remediation guidance
+        if: failure()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## ❌ Actions audit failed
+
+          zizmor found a high-severity finding in this repository's GitHub Actions
+          configuration. Findings are annotated inline on the diff; the full list is in
+          the step log above.
+
+          **To fix:** run `uvx zizmor@1.29.0 .` locally to reproduce. Most findings have
+          an auto-fix — `uvx zizmor@1.29.0 --fix=safe .` applies the safe subset. Always
+          read the resulting diff before committing; `--fix=all` is unsafe and has broken
+          workflows in this org before.
+
+          **To request an exception:** add a file-level entry to `.github/zizmor.yml`
+          with a comment justifying it. Line-anchored entries (`file.yml:LINE`) are
+          forbidden — they stop matching when a line shifts, which turns an unrelated PR
+          red for a finding it did not introduce.
+          EOF

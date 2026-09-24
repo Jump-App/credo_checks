@@ -8,6 +8,11 @@ on:
     branches:
       - '*'
 
+# Checkout is the only thing that touches the repository; nothing calls the
+# GitHub API. The org default is write, which every job would otherwise inherit.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build and test
@@ -21,7 +26,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
+        with:
+          persist-credentials: false
 
       - name: Setup Elixir Project
         uses: ./.github/actions/elixir-setup
@@ -37,7 +44,7 @@ jobs:
       # Optional, but Codecov has a bot that will comment on your PR with per-file
       # coverage deltas.
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3.1.6
         with:
           token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
           files: ./cover/excoveralls.json

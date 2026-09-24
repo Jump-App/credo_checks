@@ -8,6 +8,11 @@ on:
     branches:
       - '*'
 
+# Checkout is the only thing that touches the repository; nothing calls the
+# GitHub API. The org default is write, which every job would otherwise inherit.
+permissions:
+  contents: read
+
 jobs:
   quality_checks:
     name: Formatting, Credo, and Unused Deps
@@ -19,7 +24,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
+        with:
+          persist-credentials: false
 
       - name: Setup Elixir Project
         uses: ./.github/actions/elixir-setup

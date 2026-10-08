@@ -24,34 +24,51 @@ if Code.ensure_loaded?(Igniter) do
 
     alias Igniter.Mix.Task.Info
     alias Jump.CredoChecks.AssertElementSelectorCanNeverFail
+    alias Jump.CredoChecks.AssertReceiveTimeout
     alias Jump.CredoChecks.AvoidFunctionLevelElse
     alias Jump.CredoChecks.AvoidLoggerConfigureInTest
+    alias Jump.CredoChecks.AvoidModifyingStructBeforeChangeset
     alias Jump.CredoChecks.AvoidSocketAssignsInTest
+    alias Jump.CredoChecks.ConditionalAssertion
     alias Jump.CredoChecks.DoctestIExExamples
     alias Jump.CredoChecks.ForbiddenFunction
     alias Jump.CredoChecks.LiveViewFormCanBeRehydrated
+    alias Jump.CredoChecks.LiveViewPubSubRequiresConnected
+    alias Jump.CredoChecks.NoManualContentDisposition
     alias Jump.CredoChecks.PreferChangeOverUpDownMigrations
     alias Jump.CredoChecks.PreferTextColumns
+    alias Jump.CredoChecks.SafeBinaryToTerm
     alias Jump.CredoChecks.TestHasNoAssertions
     alias Jump.CredoChecks.TooManyAssertions
     alias Jump.CredoChecks.TopLevelAliasImportRequire
+    alias Jump.CredoChecks.UndeclaredExternalResource
+    alias Jump.CredoChecks.UnusedLiveViewAssign
     alias Jump.CredoChecks.UseObanProWorker
     alias Jump.CredoChecks.VacuousTest
     alias Jump.CredoChecks.WeakAssertion
 
+    # quokka:sort
     @checks [
       AssertElementSelectorCanNeverFail,
+      AssertReceiveTimeout,
       AvoidFunctionLevelElse,
       AvoidLoggerConfigureInTest,
+      AvoidModifyingStructBeforeChangeset,
       AvoidSocketAssignsInTest,
+      ConditionalAssertion,
       DoctestIExExamples,
       ForbiddenFunction,
       LiveViewFormCanBeRehydrated,
+      LiveViewPubSubRequiresConnected,
+      NoManualContentDisposition,
       PreferChangeOverUpDownMigrations,
       PreferTextColumns,
+      SafeBinaryToTerm,
       TestHasNoAssertions,
       TooManyAssertions,
       TopLevelAliasImportRequire,
+      UndeclaredExternalResource,
+      UnusedLiveViewAssign,
       UseObanProWorker,
       VacuousTest,
       WeakAssertion

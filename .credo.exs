@@ -72,6 +72,7 @@
           {Jump.CredoChecks.AssertReceiveTimeout, min_assert_receive_timeout: 1_000, max_refute_receive_timeout: 100},
           {Jump.CredoChecks.AvoidFunctionLevelElse, []},
           {Jump.CredoChecks.AvoidLoggerConfigureInTest, []},
+          {Jump.CredoChecks.AvoidModifyingStructBeforeChangeset, []},
           # Default exclusion list is empty
           {Jump.CredoChecks.AvoidSocketAssignsInTest, excluded: ["test/app_web/plugs/"]},
           {Jump.CredoChecks.ConditionalAssertion, []},

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* Added `Jump.CredoChecks.AvoidModifyingStructBeforeChangeset`, which flags structs that are modified (via `%{struct | field: value}`, `Map.put/3`, `struct/2`, a local helper function, etc.) before being passed into a changeset function. Values set this way bypass all changeset validation.
 * `Jump.CredoChecks.AssertReceiveTimeout` resolves a timeout held in a module attribute (`@timeout 5_000`) when the attribute is assigned once with an integer literal, instead of flagging it as unverifiable ([#37](https://github.com/Jump-App/credo_checks/issues/37)).
 * `Jump.CredoChecks.UndeclaredExternalResource` no longer treats an aliased module bound to the name `File` (`alias MyApp.Files.File`) as Elixir's `File`, so `File.t()` in a `@spec` no longer reports a missing `@external_resource` ([#38](https://github.com/Jump-App/credo_checks/issues/38)).
 * Two big improvements to `Jump.CredoChecks.UseObanProWorker`:

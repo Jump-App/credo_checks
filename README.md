@@ -35,10 +35,10 @@ See the individual modules for detailed descriptions of each check type.
     end
     ```
 - `Jump.CredoChecks.AvoidLoggerConfigureInTest`: Ensure your tests don't call `Logger.configure/1` and thereby affect log levels for other tests.
-- `Jump.CredoChecks.AvoidModifyingStructBeforeChangeset`: Flags structs that are modified (via `%{struct | field: value}`, `Map.put/3`, `struct/2`, a local helper function, etc.) before being passed into a changeset function. Values set on the struct bypass all changeset validation, and will be written to the database unconditionally. Building a new struct like `%User{account_id: id}` is not flagged.
+- `Jump.CredoChecks.AvoidModifyingStructBeforeChangeset`: Flags structs that are modified (via `%{struct | field: value}`, `Map.put/3`, `struct/2`, a local helper function, etc.) before being passed into a changeset function. Values set on the struct aren't tracked as changes, so they bypass all changeset validation. On insert, they're written to the database unvalidated; on update, they're silently not saved at all (even though the struct returned by `Repo.update/2` has them). Building a new struct like `%User{account_id: id}` is not flagged.
 
     ```elixir
-    # ❌ Bad — account_id skips validation and gets written unconditionally
+    # ❌ Bad — Repo.update/2 never saves account_id, though the returned user has it
     %{existing_user | account_id: account_id}
     |> User.changeset(params)
     |> Repo.update()

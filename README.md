@@ -35,6 +35,19 @@ See the individual modules for detailed descriptions of each check type.
     end
     ```
 - `Jump.CredoChecks.AvoidLoggerConfigureInTest`: Ensure your tests don't call `Logger.configure/1` and thereby affect log levels for other tests.
+- `Jump.CredoChecks.AvoidModifyingStructBeforeChangeset`: Flags structs that are modified (via `%{struct | field: value}`, `Map.put/3`, `struct/2`, a local helper function, etc.) before being passed into a changeset function. Values set on the struct bypass all changeset validation, and will be written to the database unconditionally. Building a new struct like `%User{account_id: id}` is not flagged.
+
+    ```elixir
+    # ❌ Bad — account_id skips validation and gets written unconditionally
+    %{existing_user | account_id: account_id}
+    |> User.changeset(params)
+    |> Repo.update()
+
+    # ✅ Good — account_id can be tracked as a change and validated
+    existing_user
+    |> User.changeset(params, account_id)
+    |> Repo.update()
+    ```
 - `Jump.CredoChecks.AvoidSocketAssignsInTest`: Ensure that tests assert on expected user behavior rather than introspecting socket `assigns`.
 - `Jump.CredoChecks.ConditionalAssertion`: Flags assertions that include an "or," like `assert foo == :bar or baz == :bop` or `assert foo > 0 || bop > 0`.
 - `Jump.CredoChecks.DoctestIExExamples`: Ensures that modules with interactive Elixir examples in their docstrings have a corresponding test file that runs those doctests.
@@ -154,6 +167,7 @@ The following instructions assume you already have Credo configured and working 
                 max_refute_receive_timeout: 100},
               {Jump.CredoChecks.AvoidFunctionLevelElse, []},
               {Jump.CredoChecks.AvoidLoggerConfigureInTest, []},
+              {Jump.CredoChecks.AvoidModifyingStructBeforeChangeset, []},
               # Default exclusion list is empty
               {Jump.CredoChecks.AvoidSocketAssignsInTest, excluded: ["test/app_web/plugs/"]},
               {Jump.CredoChecks.ConditionalAssertion, []},

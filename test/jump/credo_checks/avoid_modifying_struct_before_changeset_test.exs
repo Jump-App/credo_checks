@@ -137,6 +137,28 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
         |> assert_issue()
       end
     end
+
+    test "a changeset whose applied changes are persisted directly" do
+      for call <- [
+            "%{user | account_id: account_id} |> User.changeset(params) |> apply_changes() |> Repo.insert()",
+            "Repo.insert!(Ecto.Changeset.apply_changes(User.changeset(%{user | account_id: account_id}, params)))",
+            "Multi.insert(multi, :user, apply_changes(User.changeset(%{user | account_id: account_id}, params)))",
+            "put_embed(changeset, :settings, apply_changes(Settings.changeset(%{settings | theme: theme}, params)))"
+          ] do
+        """
+        defmodule MyApp.Accounts do
+          import Ecto.Changeset
+
+          def move_user(user, settings, changeset, multi, account_id, theme, params) do
+            #{call}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> assert_issue()
+      end
+    end
   end
 
   describe "recognizes changeset functions" do
@@ -310,9 +332,38 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
         |> assert_issue()
       end
     end
+
+    test "helper returning a variable bound to a modified struct" do
+      for body <- [
+            "action = %{action | destination_id: destination_id}\n  action",
+            """
+            updated = Map.put(action, :destination_id, destination_id)
+            Logger.info("Updated destination")
+            updated
+            """,
+            "updated = %{action | destination_id: destination_id}\n  if destination_id, do: updated, else: action"
+          ] do
+        """
+        defmodule MyApp.Actions do
+          def copy_action(action, destination_id) do
+            action
+            |> put_destination_id(destination_id)
+            |> Action.changeset(%{})
+          end
+
+          defp put_destination_id(action, destination_id) do
+            #{body}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> assert_issue()
+      end
+    end
   end
 
-  describe "flags a variable bound to a modified struct earlier in the same block" do
+  describe "flags a variable bound to a modified struct earlier in the same function" do
     test "passed directly or piped into the changeset" do
       for call <- ["User.changeset(user, params)", "user |> User.changeset(params) |> Repo.update()"] do
         """
@@ -435,6 +486,52 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
       |> to_source_file()
       |> run_check(AvoidModifyingStructBeforeChangeset)
       |> assert_issue()
+    end
+
+    test "bound via another variable bound to a modified struct" do
+      """
+      defmodule MyApp.Accounts do
+        def move_user(user, account_id, params) do
+          moved_user = %{user | account_id: account_id}
+          user = if account_id, do: moved_user, else: user
+          User.changeset(user, params)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AvoidModifyingStructBeforeChangeset)
+      |> assert_issue(fn issue -> assert issue.line_no == 5 end)
+    end
+
+    test "used inside a nested block, clause, function, or comprehension that doesn't rebind it" do
+      for expr <- [
+            """
+            if account_id do
+              Logger.info("Moving user")
+              user |> User.changeset(params) |> Repo.update()
+            end
+            """,
+            """
+            case params do
+              %{} -> User.changeset(user, params)
+            end
+            """,
+            "Repo.transaction(fn -> user |> User.changeset(params) |> Repo.update!() end)",
+            "for attrs <- params, do: User.changeset(user, attrs)",
+            "with {:ok, attrs} <- validate(params), do: User.changeset(user, attrs)"
+          ] do
+        """
+        defmodule MyApp.Accounts do
+          def move_user(user, account_id, params) do
+            user = %{user | account_id: account_id}
+            #{expr}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> assert_issue()
+      end
     end
   end
 
@@ -666,6 +763,27 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
       |> refute_issues()
     end
 
+    test "a local helper that modifies a struct but returns the original" do
+      """
+      defmodule MyApp.Actions do
+        def copy_action(action, destination_id) do
+          action
+          |> notify_destination(destination_id)
+          |> Action.changeset(%{})
+        end
+
+        defp notify_destination(action, destination_id) do
+          updated = %{action | destination_id: destination_id}
+          notify(updated)
+          action
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AvoidModifyingStructBeforeChangeset)
+      |> refute_issues()
+    end
+
     test "a local helper whose arity doesn't match the call" do
       """
       defmodule MyApp.Actions do
@@ -757,6 +875,25 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
         |> run_check(AvoidModifyingStructBeforeChangeset)
         |> refute_issues()
       end
+    end
+
+    test "a modified variable rebound inside a nested block" do
+      """
+      defmodule MyApp.Accounts do
+        def move_user(user, account_id, params) do
+          user = %{user | account_id: account_id}
+          notify(user)
+
+          if account_id do
+            user = Repo.reload!(user)
+            User.changeset(user, params)
+          end
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AvoidModifyingStructBeforeChangeset)
+      |> refute_issues()
     end
 
     test "a different variable than the one that was modified" do

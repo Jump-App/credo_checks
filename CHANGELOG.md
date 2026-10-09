@@ -7,6 +7,7 @@
   * Flag `process/1` callbacks that expect string keys in the job args when the worker declares an `args_schema`. (The `args_schema` ensures the worker will only ever be called with atom keys in the args.)
   * Add `supported_worker_modules` (default: `[Oban.Pro.Worker]`) so project-specific wrappers can be treated as equivalent to `use Oban.Pro.Worker`.
 * `Jump.CredoChecks.UndeclaredExternalResource` no longer treats an aliased module bound to the name `File` (`alias MyApp.Files.File`) as Elixir's `File`, so `File.t()` in a `@spec` no longer reports a missing `@external_resource` ([#38](https://github.com/Jump-App/credo_checks/issues/38)).
+* Fixed a bug in `Jump.CredoChecks.VacuousTest` around `as:` aliases ([#42](https://github.com/Jump-App/credo_checks/pull/42))
 * Improvements to  `Jump.CredoChecks.AssertReceiveTimeout`:
   * It now resolves a timeout held in a module attribute (`@timeout 5_000`) when the attribute is assigned once with an integer literal, instead of flagging it as unverifiable ([#37](https://github.com/Jump-App/credo_checks/issues/37)).
   * Its `max_refute_receive_timeout` now also flags PhoenixTest `refute_has` calls that pass an explicit `:timeout` longer than the configured maximum.

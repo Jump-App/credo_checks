@@ -118,6 +118,25 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
         |> assert_issue()
       end
     end
+
+    test "a struct modified using a map of params" do
+      for call <- [
+            "user |> Map.merge(params) |> User.changeset(attrs)",
+            "User.changeset(struct(user, attrs), params)",
+            "%{user | account_id: params.account_id} |> User.changeset(params)"
+          ] do
+        """
+        defmodule MyApp.Accounts do
+          def move_user(user, attrs, params) do
+            #{call}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> assert_issue()
+      end
+    end
   end
 
   describe "recognizes changeset functions" do
@@ -171,13 +190,13 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
 
     test "piped into cast" do
       """
-      defmodule MyApp.Accounts.User do
+      defmodule MyApp.Accounts do
         import Ecto.Changeset
 
-        def changeset(user, attrs) do
+        def rename_user(user, attrs) do
           %{user | name: String.trim(user.name)}
           |> cast(attrs, [:name])
-          |> validate_required([:name])
+          |> Repo.update()
         end
       end
       """
@@ -341,6 +360,69 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
       |> assert_issue()
     end
 
+    test "a changeset variable used for more than to_form" do
+      for statements <- [
+            """
+            changeset = Contact.changeset(%{contact | account_id: account_id}, params)
+            assign(socket, changeset: changeset, form: to_form(changeset))
+            """,
+            """
+            changeset = Contact.changeset(%{contact | account_id: account_id}, params)
+            if connected?(socket), do: Repo.update(changeset)
+            assign(socket, form: to_form(changeset))
+            """,
+            """
+            changeset = Contact.changeset(%{contact | account_id: account_id}, params)
+            changeset = %{changeset | action: :update}
+            Repo.update(changeset)
+            """,
+            """
+            _result = Repo.update(Contact.changeset(%{contact | account_id: account_id}, params))
+            assign(socket, form: to_form(Contact.changeset(contact, params)))
+            """
+          ] do
+        """
+        defmodule MyAppWeb.ContactLive.FormComponent do
+          def save_contact(contact, account_id, params, socket) do
+            #{statements}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> assert_issue(fn issue -> assert issue.line_no == 3 end)
+      end
+    end
+
+    test "a changeset variable used for more than apply_changes" do
+      """
+      defmodule MyApp.Accounts do
+        def move_user(user, account_id, params) do
+          changeset = User.changeset(%{user | account_id: account_id}, params)
+          notify(Ecto.Changeset.apply_changes(changeset))
+          Repo.update(changeset)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AvoidModifyingStructBeforeChangeset)
+      |> assert_issue(fn issue -> assert issue.line_no == 3 end)
+    end
+
+    test "a changeset variable returned from the block" do
+      """
+      defmodule MyApp.Contacts do
+        def move_contact(contact, account_id, params) do
+          contact = Repo.preload(contact, :account)
+          changeset = Contact.changeset(%{contact | account_id: account_id}, params)
+        end
+      end
+      """
+      |> to_source_file()
+      |> run_check(AvoidModifyingStructBeforeChangeset)
+      |> assert_issue(fn issue -> assert issue.line_no == 4 end)
+    end
+
     test "bound via a conditional modification" do
       """
       defmodule MyApp.Accounts do
@@ -394,7 +476,7 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
     end
 
     test "params passed in to build an implied, new struct" do
-      for params_name <- ["map", "attrs", "attributes", "params"],
+      for params_name <- ["map", "attrs", "attributes", "params", "parameters"],
           call <- [
             "User.changeset(#{params_name})",
             "#{params_name} |> Map.put(:account_id, account_id) |> User.changeset() |> Repo.update()",
@@ -406,6 +488,37 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
           def update_user(user, account, id, params) do
             #{call}
           end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> refute_issues()
+      end
+    end
+
+    test "a modified map of params passed to a changeset function along with other arguments" do
+      for params_name <- ["map", "attrs", "attributes", "params", "parameters"],
+          statements <- [
+            """
+            #{params_name} = normalize_form_params(#{params_name})
+            changeset = rubric_form_changeset(#{params_name}, require_task?: selected_rubric == nil)
+            Repo.insert(changeset)
+            """,
+            "#{params_name} = normalize_form_params(form_data)\nRubric.changeset(#{params_name}, opts)",
+            "#{params_name} |> normalize_form_params() |> Rubric.changeset(opts)",
+            "#{params_name} |> Map.put(:account_id, account_id) |> Rubric.changeset(opts)",
+            "#{params_name} |> Map.put(:account_id, account_id) |> Map.put(:name, name) |> Rubric.changeset(opts)",
+            "Rubric.changeset(%{#{params_name} | account_id: account_id}, opts)",
+            ~s'Rubric.changeset(put_in(#{params_name}["account_id"], account_id), opts)',
+            "form_attrs = Map.put(#{params_name}, :account_id, account_id)\nRubric.changeset(form_attrs, opts)"
+          ] do
+        """
+        defmodule MyApp.Rubrics do
+          def create_rubric(#{params_name}, form_data, selected_rubric, account_id, name, opts) do
+            #{statements}
+          end
+
+          defp normalize_form_params(form), do: Map.update!(form, :name, &String.trim/1)
         end
         """
         |> to_source_file()
@@ -427,6 +540,27 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
         defmodule MyApp.Accounts.User do
           def create(account_id, params) do
             #{call}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> refute_issues()
+      end
+    end
+
+    test "a new struct built from a variable named for a module" do
+      for statements <- [
+            "struct(module, %{id: Ecto.UUID.generate()}) |> module.changeset(params)",
+            "module |> struct(%{id: Ecto.UUID.generate()}) |> module.changeset(params)",
+            "schema_module |> struct!(id: Ecto.UUID.generate()) |> changeset(params)",
+            "Kernel.struct(module_name, id: Ecto.UUID.generate()) |> changeset(params)",
+            "record = struct(module, id: Ecto.UUID.generate())\nmodule.changeset(record, params)"
+          ] do
+        """
+        defmodule MyApp.Records do
+          def create(module, schema_module, module_name, params) do
+            #{statements}
           end
         end
         """
@@ -469,6 +603,34 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
       |> to_source_file()
       |> run_check(AvoidModifyingStructBeforeChangeset)
       |> refute_issues()
+    end
+
+    test "a struct modified within a changeset function" do
+      for definition <- [
+            """
+            def changeset(user, attrs) do
+                %{user | account_id: user.account_id || Ecto.UUID.generate()}
+                |> cast(attrs, [:name])
+              end
+            """,
+            """
+            defp registration_changeset(user, attrs) when is_map(attrs) do
+                user = Map.put(user, :account_id, user.account_id || Ecto.UUID.generate())
+                changeset(user, attrs)
+              end
+            """
+          ] do
+        """
+        defmodule MyApp.Accounts.User do
+          import Ecto.Changeset
+
+          #{definition}
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> refute_issues()
+      end
     end
 
     test "a changeset piped into another changeset function" do
@@ -610,6 +772,123 @@ defmodule Jump.CredoChecks.AvoidModifyingStructBeforeChangesetTest do
       |> to_source_file()
       |> run_check(AvoidModifyingStructBeforeChangeset)
       |> refute_issues()
+    end
+
+    test "a changeset passed to Phoenix.Component.to_form" do
+      for call <- [
+            ~s'%{user | password: "hunter1"} |> User.changeset(%{}) |> Phoenix.Component.to_form()',
+            ~s[to_form(User.changeset(%{user | password: "hunter1"}, %{}), as: "user")],
+            ~s[%{user | password: "hunter1"} |> User.changeset(params) |> Phoenix.Component.to_form()],
+            ~s[%{user | password: "hunter1"} |> User.changeset(params) |> to_form(as: "user")],
+            ~s[to_form(User.changeset(%{user | password: "hunter1"}, params), as: "user")],
+            ~s[Component.to_form(User.changeset(Map.put(user, :password, "hunter1"), params))],
+            ~s[user = %{user | password: "hunter1"}\nuser |> User.changeset(params) |> to_form()]
+          ] do
+        """
+        defmodule MyAppWeb.UserLive.FormComponent do
+          def build_form(user, params) do
+            #{call}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> refute_issues()
+      end
+    end
+
+    test "a changeset variable only passed to to_form" do
+      for statements <- [
+            """
+            changeset = Contact.changeset(%{contact | account_id: account_id}, %{})
+            assign(socket, :fact_card_form, to_form(changeset, as: "contact"))
+            """,
+            """
+            changeset = contact |> Map.put(:account_id, account_id) |> Contact.changeset(params)
+            socket = assign(socket, :form, to_form(changeset))
+            {:noreply, socket}
+            """,
+            """
+            contact = %{contact | account_id: account_id}
+            changeset = Contact.changeset(contact, params)
+            {:noreply, assign(socket, form: to_form(changeset), other_form: to_form(changeset, as: "other"))}
+            """,
+            """
+            changeset = Contact.changeset(%{contact | account_id: account_id}, params)
+            changeset = %{changeset | action: :validate}
+            {:noreply, assign(socket, form: to_form(changeset))}
+            """,
+            """
+            changeset =
+              contact
+              |> Map.put(:account_id, account_id)
+              |> Contact.changeset(params)
+              |> Map.put(:action, :validate)
+
+            {:noreply, assign(socket, form: to_form(changeset))}
+            """
+          ] do
+        """
+        defmodule MyAppWeb.ContactLive.FormComponent do
+          def handle_event("validate", %{"contact" => params}, socket) do
+            #{statements}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> refute_issues()
+      end
+    end
+
+    test "a changeset passed to Ecto.Changeset.apply_changes" do
+      for call <- [
+            "%{user | account_id: account_id} |> User.changeset(params) |> Ecto.Changeset.apply_changes()",
+            "Ecto.Changeset.apply_changes(User.changeset(%{user | account_id: account_id}, params))",
+            "user |> Map.put(:account_id, account_id) |> User.changeset(params) |> Changeset.apply_changes()",
+            "user |> Map.put(:account_id, account_id) |> cast(params, [:name]) |> apply_changes()",
+            "user = %{user | account_id: account_id}\nuser |> User.changeset(params) |> apply_changes()"
+          ] do
+        """
+        defmodule MyApp.Accounts do
+          import Ecto.Changeset
+          alias Ecto.Changeset
+
+          def preview_move(user, account_id, params) do
+            #{call}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> refute_issues()
+      end
+    end
+
+    test "a changeset variable only passed to apply_changes" do
+      for statements <- [
+            """
+            changeset = User.changeset(%{user | account_id: account_id}, params)
+            preview = Ecto.Changeset.apply_changes(changeset)
+            render(conn, :preview, user: preview)
+            """,
+            """
+            user = Map.put(user, :account_id, account_id)
+            changeset = User.changeset(user, params)
+            render(conn, :preview, user: Ecto.Changeset.apply_changes(changeset))
+            """
+          ] do
+        """
+        defmodule MyAppWeb.UserController do
+          def preview_move(conn, user, account_id, params) do
+            #{statements}
+          end
+        end
+        """
+        |> to_source_file()
+        |> run_check(AvoidModifyingStructBeforeChangeset)
+        |> refute_issues()
+      end
     end
 
     test "a changeset variable with a modified action" do

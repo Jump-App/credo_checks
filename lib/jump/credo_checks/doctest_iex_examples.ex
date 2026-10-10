@@ -20,7 +20,7 @@ defmodule Jump.CredoChecks.DoctestIExExamples do
       via `doctest` in a corresponding test file.
 
       For a file at `lib/jump/foo.ex` defining `Jump.Foo`, this check expects
-      a sibling test file `lib/jump/foo_test.exs` that contains:
+      (by default) a test file at `test/jump/foo_test.exs` that contains:
 
           doctest Jump.Foo
 
@@ -44,51 +44,76 @@ defmodule Jump.CredoChecks.DoctestIExExamples do
   end
 
   defp check_for_doctest(source_file, params) do
-    ast = SourceFile.ast(source_file)
-
-    case find_iex_in_docs(ast) do
-      nil ->
+    source_file
+    |> SourceFile.ast()
+    |> modules_with_iex_docs()
+    |> case do
+      [] ->
         []
 
-      iex_line ->
+      modules ->
         issue_meta = IssueMeta.for(source_file, params)
-        module_name = extract_module_name(ast)
-
-        if module_name do
-          derive_test_path = Params.get(params, :derive_test_path, __MODULE__)
-          test_file = derive_test_path.(source_file.filename)
-          check_test_file(test_file, module_name, iex_line, issue_meta)
-        else
-          []
-        end
+        derive_test_path = Params.get(params, :derive_test_path, __MODULE__)
+        test_file = derive_test_path.(source_file.filename)
+        check_test_file(test_file, modules, issue_meta)
     end
   end
 
   # Walk the AST looking for @doc or @moduledoc attributes whose string
-  # value contains "iex>". Returns the line number of the attribute, or nil.
-  defp find_iex_in_docs(ast) do
-    {_ast, result} =
-      Macro.prewalk(ast, nil, fn
-        # @doc "..." or @moduledoc "..."
-        {:@, _, [{attr, meta, [value]}]} = node, nil when attr in [:doc, :moduledoc] ->
-          if doc_contains_iex?(value) do
-            {node, meta[:line]}
-          else
-            {node, nil}
-          end
+  # contains "iex>", tracking which (possibly nested) module each one belongs to.
+  # Returns `{module, line}` for each such module, where `line` is that of the
+  # module's first doc attribute containing an example.
+  defp modules_with_iex_docs(ast) do
+    {_ast, {_module_stack, found}} = Macro.traverse(ast, {[], []}, &enter_node/2, &leave_node/2)
 
-        node, acc ->
-          {node, acc}
-      end)
+    found
+    |> Enum.reverse()
+    |> Enum.uniq_by(fn {module, _line} -> module end)
+  end
 
-    result
+  defp enter_node({:defmodule, _, [name, _block]} = node, {module_stack, found}) do
+    {node, {[module_name(name, module_stack) | module_stack], found}}
+  end
+
+  # @doc "..." or @moduledoc "..."
+  defp enter_node({:@, _, [{attr, meta, [value]}]} = node, {[module | _] = module_stack, found})
+       when attr in [:doc, :moduledoc] and not is_nil(module) do
+    if doc_contains_iex?(value) do
+      {node, {module_stack, [{module, meta[:line]} | found]}}
+    else
+      {node, {module_stack, found}}
+    end
+  end
+
+  defp enter_node(node, acc), do: {node, acc}
+
+  defp leave_node({:defmodule, _, [_name, _block]} = node, {[_module | module_stack], found}) do
+    {node, {module_stack, found}}
+  end
+
+  defp leave_node(node, acc), do: {node, acc}
+
+  # Resolves the module a `defmodule` defines, mirroring how Elixir prefixes nested module names
+  # with the enclosing module's name. Returns nil if the name can't be determined statically.
+  defp module_name({:__aliases__, _, [{:__MODULE__, _, _} | rest]}, [parent | _]) when not is_nil(parent) do
+    concat_module([parent | rest])
+  end
+
+  defp module_name({:__aliases__, _, [Elixir | _] = parts}, _module_stack), do: concat_module(parts)
+  defp module_name({:__aliases__, _, parts}, []), do: concat_module(parts)
+  defp module_name({:__aliases__, _, parts}, [parent | _]) when not is_nil(parent), do: concat_module([parent | parts])
+  defp module_name(_name, _module_stack), do: nil
+
+  defp concat_module(parts) do
+    if Enum.all?(parts, &is_atom/1) do
+      Module.concat(parts)
+    end
   end
 
   defp doc_contains_iex?(value) when is_binary(value), do: String.contains?(value, "iex>")
 
   # Handle heredoc-style sigils like ~S, which appear as {:sigil_S, _, [string, _]}
-  defp doc_contains_iex?({:sigil_S, _, [{:<<>>, _, [value]}, _]}) when is_binary(value),
-    do: String.contains?(value, "iex>")
+  defp doc_contains_iex?({:sigil_S, _, [{:<<>>, _, [val]}, _]}) when is_binary(val), do: String.contains?(val, "iex>")
 
   defp doc_contains_iex?({:<<>>, _, parts}) do
     Enum.any?(parts, fn
@@ -99,64 +124,90 @@ defmodule Jump.CredoChecks.DoctestIExExamples do
 
   defp doc_contains_iex?(_), do: false
 
-  defp extract_module_name(ast) do
-    {_ast, module_name} =
-      Macro.prewalk(ast, nil, fn
-        {:defmodule, _, [{:__aliases__, _, parts} | _]} = node, nil ->
-          {node, parts |> Module.concat() |> inspect()}
+  defp check_test_file(test_file, modules, issue_meta) do
+    if File.exists?(test_file) do
+      doctested = doctested_modules([test_file])
 
-        node, acc ->
-          {node, acc}
-      end)
+      for {module, iex_line} <- modules, module not in doctested do
+        module_name = inspect(module)
 
-    module_name
-  end
-
-  defp check_test_file(test_file, module_name, iex_line, issue_meta) do
-    cond do
-      File.exists?(test_file) and test_file_has_doctest?(test_file, module_name) ->
-        []
-
-      File.exists?(test_file) ->
-        [
-          format_issue(issue_meta,
-            message: "Module `#{module_name}` has iex> examples but its test file is missing `doctest #{module_name}`.",
-            trigger: "iex>",
-            line_no: iex_line
-          )
-        ]
-
-      # When the exact test file doesn't exist (e.g. it was split into multiple files),
-      # check sibling test files in the same directory for the doctest.
-      sibling_has_doctest?(test_file, module_name) ->
-        []
-
-      true ->
-        [
-          format_issue(issue_meta,
-            message: "Module `#{module_name}` has iex> examples but no test file at `#{Path.basename(test_file)}`.",
-            trigger: "iex>",
-            line_no: iex_line
-          )
-        ]
+        format_issue(issue_meta,
+          message: "Module `#{module_name}` has iex> examples but its test file is missing `doctest #{module_name}`.",
+          trigger: "iex>",
+          line_no: iex_line
+        )
+      end
+    else
+      for {module, iex_line} <- modules do
+        format_issue(issue_meta,
+          message: "Module `#{inspect(module)}` has iex> examples but no test file at `#{Path.basename(test_file)}`.",
+          trigger: "iex>",
+          line_no: iex_line
+        )
+      end
     end
   end
 
-  defp sibling_has_doctest?(test_file, module_name) do
-    test_file
-    |> Path.dirname()
-    |> Path.join("*_test.exs")
-    |> Path.wildcard()
-    |> Enum.any?(&test_file_has_doctest?(&1, module_name))
+  # Returns the set of modules the given test files call `doctest` on.
+  # TODO: Aliases are treated as file-wide rather than lexically scoped... that's an approximation, but maybe good enough.
+  defp doctested_modules(test_files) do
+    test_files
+    |> Enum.flat_map(fn test_file ->
+      with {:ok, source} <- File.read(test_file),
+           {:ok, ast} <- Code.string_to_quoted(source) do
+        {_ast, {_aliases, modules}} = Macro.prewalk(ast, {%{}, []}, &collect_doctest/2)
+        modules
+      else
+        _ -> []
+      end
+    end)
+    |> MapSet.new()
   end
 
-  defp test_file_has_doctest?(test_file, module_name) do
-    components = String.split(module_name, ".")
-    possible_names = for i <- 1..length(components), do: components |> Enum.take(-i) |> Enum.join(".")
+  # alias Foo.Bar
+  defp collect_doctest({:alias, _, [{:__aliases__, _, parts}]} = node, acc) do
+    {node, put_alias(acc, List.last(parts), parts)}
+  end
 
-    test_file
-    # sobelow_skip ["Traversal.FileModule"]
-    |> File.read!()
-    |> String.contains?(Enum.map(possible_names, &"doctest #{&1}"))
+  # alias Foo.Bar, as: Baz
+  defp collect_doctest({:alias, _, [{:__aliases__, _, parts}, opts]} = node, acc) when is_list(opts) do
+    case Keyword.get(opts, :as) do
+      {:__aliases__, _, [as]} -> {node, put_alias(acc, as, parts)}
+      _ -> {node, put_alias(acc, List.last(parts), parts)}
+    end
+  end
+
+  # alias Foo.{Bar, Baz}
+  defp collect_doctest({:alias, _, [{{:., _, [{:__aliases__, _, base}, :{}]}, _, children} | _]} = node, acc) do
+    acc =
+      Enum.reduce(children, acc, fn
+        {:__aliases__, _, parts}, acc -> put_alias(acc, List.last(parts), base ++ parts)
+        _child, acc -> acc
+      end)
+
+    {node, acc}
+  end
+
+  # doctest Foo.Bar, with or without options
+  defp collect_doctest({:doctest, _, [{:__aliases__, _, parts} | _]} = node, {aliases, modules}) do
+    {node, {aliases, [expand_alias(parts, aliases) | modules]}}
+  end
+
+  defp collect_doctest(node, acc), do: {node, acc}
+
+  defp put_alias({aliases, modules}, name, parts) do
+    case expand_alias(parts, aliases) do
+      nil -> {aliases, modules}
+      module -> {Map.put(aliases, name, module), modules}
+    end
+  end
+
+  # Resolves an alias reference like `Bar.Baz` to its full module, given the aliases
+  # declared so far. Returns nil if the name can't be determined statically.
+  defp expand_alias([head | tail] = parts, aliases) do
+    case aliases do
+      %{^head => module} -> concat_module([module | tail])
+      _ -> concat_module(parts)
+    end
   end
 end

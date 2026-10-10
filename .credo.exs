@@ -140,11 +140,6 @@
           #
           {Credo.Check.Design.AliasUsage, [priority: :low, if_nested_deeper_than: 2, if_called_more_often_than: 0]},
           {Credo.Check.Design.TagFIXME, []},
-          # You can also customize the exit_status of each check.
-          # If you don't want TODO comments to cause `mix credo` to fail, just
-          # set this value to 0 (zero).
-          #
-          {Credo.Check.Design.TagTODO, [exit_status: 2]},
 
           #
           ## Readability Checks
@@ -219,6 +214,8 @@
           {Credo.Check.Warning.WrongTestFilename, []}
         ],
         disabled: [
+          {Credo.Check.Design.TagTODO, [exit_status: 2]},
+
           #
           # Checks scheduled for next check update (opt-in for now)
           {Credo.Check.Refactor.UtcNowTruncate, []},

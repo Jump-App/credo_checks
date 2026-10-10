@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+* Fixed two oversights in `Jump.CredoChecks.DoctestIExExamples` (cases we failed to catch `iex>` examples that never got doctested):
+  * Examples in a nested module; each module with examples now needs its own `doctest`, since `doctest MyApp.Outer` doesn't run the examples in `MyApp.Outer.Inner`.
+  * Fixed edge cases in how we parsed module names, so that we now resolve aliases (including `alias ..., as: ...`) correctly, and we do not treat commented-out doctest lines as passing.
+
 ## v0.6.0
 
 * Added `Jump.CredoChecks.AvoidModifyingStructBeforeChangeset`, which flags structs that are modified (via `%{struct | field: value}`, `Map.put/3`, `struct/2`, a local helper function, etc.) before being passed into a changeset function. Values set this way aren't tracked as changes, so they bypass all changeset validation, and an update silently won't save them.

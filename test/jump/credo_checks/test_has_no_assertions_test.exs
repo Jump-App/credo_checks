@@ -68,4 +68,52 @@ defmodule Jump.CredoChecks.TestHasNoAssertionsTest do
       |> refute_issues()
     end
   end
+
+  test "does not alert on test calling local helpers that assert" do
+    """
+    defmodule MyTest do
+      use ExUnit.Case, async: true
+
+      test "direct helper" do
+        then_it_works(1)
+      end
+
+      test "piped helper" do
+        %{}
+        |> given_something()
+        |> then_it_really_works()
+      end
+
+      defp given_something(context), do: context
+
+      defp then_it_works(value) when is_integer(value) do
+        assert value == 1
+      end
+
+      defp then_it_really_works(context) do
+        assert_has(context, "dd")
+      end
+    end
+    """
+    |> to_source_file("test/my_test.exs")
+    |> run_check(TestHasNoAssertions)
+    |> refute_issues()
+  end
+
+  test "alerts on test calling only local helpers that don't assert" do
+    """
+    defmodule MyTest do
+      use ExUnit.Case, async: true
+
+      test "no assertions" do
+        given_something(%{})
+      end
+
+      defp given_something(context), do: context
+    end
+    """
+    |> to_source_file("test/my_test.exs")
+    |> run_check(TestHasNoAssertions)
+    |> assert_issue()
+  end
 end

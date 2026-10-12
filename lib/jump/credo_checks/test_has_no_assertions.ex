@@ -46,11 +46,34 @@ defmodule Jump.CredoChecks.TestHasNoAssertions do
     if String.ends_with?(filename, "_test.exs") do
       custom_assertion_functions = params |> Params.get(:custom_assertion_functions, __MODULE__) |> List.wrap()
       functions = custom_assertion_functions ++ @default_assertion_functions
+      functions = local_assertion_functions(source_file, functions) ++ functions
       Credo.Code.prewalk(source_file, &traverse(&1, &2, issue_meta, functions))
     else
       []
     end
   end
+
+  # The name of every function defined in the file that has at least one clause containing an assertion.
+  defp local_assertion_functions(source_file, functions) do
+    source_file
+    |> Credo.Code.prewalk(fn
+      {def_type, _, [head, body]} = ast, local_functions when def_type in [:def, :defp] ->
+        with {:ok, name} <- function_name(head),
+             true <- has_assertion?(body, functions) do
+          {ast, [name | local_functions]}
+        else
+          _ -> {ast, local_functions}
+        end
+
+      ast, local_functions ->
+        {ast, local_functions}
+    end)
+    |> Enum.uniq()
+  end
+
+  defp function_name({:when, _, [head, _guard]}), do: function_name(head)
+  defp function_name({name, _, args}) when is_atom(name) and (is_list(args) or is_atom(args)), do: {:ok, name}
+  defp function_name(_head), do: :error
 
   # Test block without context: test "name" do ... end
   defp traverse({:test, meta, [name, [do: body]]} = _ast, issues, issue_meta, functions) when is_binary(name) do

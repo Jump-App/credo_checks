@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* `Jump.CredoChecks.LiveViewFormCanBeRehydrated` no longer crashes on `embed_templates` calls with options (e.g. `embed_templates "templates/*", suffix: "_html"`) ([#51](https://github.com/Jump-App/credo_checks/issues/51)).
 * `Jump.CredoChecks.TestHasNoAssertions` now counts calls to functions defined in the test file whose bodies assert, so tests built from helpers like `then_it_shows(...)` are no longer flagged.
 * Fixed two oversights in `Jump.CredoChecks.DoctestIExExamples` (cases we failed to catch `iex>` examples that never got doctested):
   * Examples in a nested module; each module with examples now needs its own `doctest`, since `doctest MyApp.Outer` doesn't run the examples in `MyApp.Outer.Inner`.

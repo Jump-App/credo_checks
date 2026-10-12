@@ -61,23 +61,20 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydrated do
     {node, issues ++ new_issues}
   end
 
-  # Check embedded templates
-  defp traverse({:embed_templates, _meta, template_patterns} = node, issues, issue_meta)
-       when is_list(template_patterns) do
+  # Check embedded templates (`embed_templates pattern, opts`)
+  defp traverse({:embed_templates, _meta, [template_pattern | _opts]} = node, issues, issue_meta)
+       when is_binary(template_pattern) do
     source_file = Credo.IssueMeta.source_file(issue_meta)
     source_dir = Path.dirname(source_file.filename)
 
     # Find all .heex files in the templates directory
     new_issues =
-      template_patterns
-      |> Enum.flat_map(fn template_pattern ->
-        source_dir
-        |> Path.join(template_pattern)
-        |> Path.wildcard()
-        |> Enum.reject(&exclude_path?(&1, issue_meta))
-        |> Enum.flat_map(fn heex_file ->
-          check_heex_file(heex_file, issue_meta)
-        end)
+      source_dir
+      |> Path.join(template_pattern)
+      |> Path.wildcard()
+      |> Enum.reject(&exclude_path?(&1, issue_meta))
+      |> Enum.flat_map(fn heex_file ->
+        check_heex_file(heex_file, issue_meta)
       end)
       |> Enum.uniq()
 

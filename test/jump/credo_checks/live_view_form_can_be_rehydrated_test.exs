@@ -382,4 +382,31 @@ defmodule Jump.CredoChecks.LiveViewFormCanBeRehydratedTest do
     |> run_check(LiveViewFormCanBeRehydrated)
     |> assert_issue()
   end
+
+  @tag :tmp_dir
+  test "reports issue in embedded template when embed_templates has options", %{tmp_dir: tmp_dir} do
+    File.mkdir_p!(Path.join(tmp_dir, "templates"))
+
+    File.write!(Path.join(tmp_dir, "templates/form.html.heex"), """
+    <.form for={@form} phx-submit="save">
+      <input type="text" name="name" />
+    </.form>
+    """)
+
+    source_file =
+      to_source_file(
+        """
+        defmodule TestHTML do
+          use Phoenix.Component
+
+          embed_templates "templates/*", suffix: "_html"
+        end
+        """,
+        Path.join(tmp_dir, "test_html.ex")
+      )
+
+    # Issues are reported against the template file, which `run_check/2` doesn't collect
+    assert [%Credo.Issue{filename: filename}] = LiveViewFormCanBeRehydrated.run(source_file)
+    assert String.ends_with?(filename, "templates/form.html.heex")
+  end
 end

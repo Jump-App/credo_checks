@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* Added `Jump.CredoChecks.NoWordSigilInterpolation`, which flags interpolation inside lowercase word sigils (`~w`). The sigil splits on whitespace after interpolation, so quoting a phrase doesn't keep it together and interpolated values can unexpectedly become multiple list items. Use an explicit list instead.
 * `Jump.CredoChecks.LiveViewFormCanBeRehydrated` no longer crashes on `embed_templates` calls with options (e.g. `embed_templates "templates/*", suffix: "_html"`) ([#51](https://github.com/Jump-App/credo_checks/issues/51)).
 * `Jump.CredoChecks.TestHasNoAssertions` now counts calls to functions defined in the test file whose bodies assert, so tests built from helpers like `then_it_shows(...)` are no longer flagged.
 * Fixed two oversights in `Jump.CredoChecks.DoctestIExExamples` (cases we failed to catch `iex>` examples that never got doctested):

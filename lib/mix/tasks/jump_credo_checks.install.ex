@@ -35,6 +35,7 @@ if Code.ensure_loaded?(Igniter) do
     alias Jump.CredoChecks.LiveViewFormCanBeRehydrated
     alias Jump.CredoChecks.LiveViewPubSubRequiresConnected
     alias Jump.CredoChecks.NoManualContentDisposition
+    alias Jump.CredoChecks.NoWordSigilInterpolation
     alias Jump.CredoChecks.PreferChangeOverUpDownMigrations
     alias Jump.CredoChecks.PreferTextColumns
     alias Jump.CredoChecks.SafeBinaryToTerm
@@ -61,6 +62,7 @@ if Code.ensure_loaded?(Igniter) do
       LiveViewFormCanBeRehydrated,
       LiveViewPubSubRequiresConnected,
       NoManualContentDisposition,
+      NoWordSigilInterpolation,
       PreferChangeOverUpDownMigrations,
       PreferTextColumns,
       SafeBinaryToTerm,

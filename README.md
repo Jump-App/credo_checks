@@ -55,6 +55,18 @@ See the individual modules for detailed descriptions of each check type.
 - `Jump.CredoChecks.LiveViewFormCanBeRehydrated`: Ensures any form with a `phx-submit` attribute also includes an ID and `phx-change` handler. Without these, LiveView can't maintain frontend form state across deploys/reconnects, leading to the form being totally reset.
 - `Jump.CredoChecks.LiveViewPubSubRequiresConnected`: Flags `Phoenix.PubSub.subscribe/{2,3}` calls (or your custom wrappers) in LiveView `mount/3` that are not wrapped in `if connected?(socket)`. LiveView mount runs twice (disconnected static render, then websocket), so unguarded subscriptions attach to a process that is about to die.
 - `Jump.CredoChecks.NoManualContentDisposition`: Ensures you use `Phoenix.Controller.send_download/3` rather than of manually setting `content-disposition`. This provides a backstop against accidentally failing to properly sanitize filenames in response headers (a potential security vulnerability).
+- `Jump.CredoChecks.NoWordSigilInterpolation`: Flags interpolation inside lowercase word sigils (`~w`). Word sigils split their contents on whitespace *after* interpolation, so quoting does not keep a phrase together and an interpolated value can silently become several list items. Use an explicit list instead. Applies to all lowercase `~w` modifiers (strings, atoms, and charlists); `~W` is not flagged.
+
+    ```elixir
+    two_names = "john smith"
+    # ❌ Bad — this is a confusing - is it 3-elements list or 4-elements list? (it's the latter)
+    ~w(hello #{two_names} world)
+
+    # ✅ Good
+    ["hello", two_names, "world"]
+    # or
+    ["hello", "world"] ++ two_names
+    ```
 - `Jump.CredoChecks.UndeclaredExternalResource`: Ensures modules that read from the file system at compile time (e.g., `File.read!/1` in a module attribute) declare a corresponding `@external_resource` so that editing the file on disk triggers a recompile.
 
     ```elixir
@@ -189,6 +201,7 @@ The following instructions assume you already have Credo configured and working 
               {Jump.CredoChecks.LiveViewPubSubRequiresConnected,
                custom_pubsub_functions: [{MyAppWeb.PubSub, :subscribe}, {:my_imported_subscribe, 1}]},
               {Jump.CredoChecks.NoManualContentDisposition, []},
+              {Jump.CredoChecks.NoWordSigilInterpolation, []},
               {Jump.CredoChecks.UndeclaredExternalResource, []},
               # Default start_after is "0"
               {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},

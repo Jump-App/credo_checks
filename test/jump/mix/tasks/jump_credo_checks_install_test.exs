@@ -59,6 +59,7 @@ defmodule Mix.Tasks.JumpCredoChecks.InstallTest do
       + |{Jump.CredoChecks.LiveViewFormCanBeRehydrated, []},
       + |{Jump.CredoChecks.LiveViewPubSubRequiresConnected, []},
       + |{Jump.CredoChecks.NoManualContentDisposition, []},
+      + |{Jump.CredoChecks.NoWordSigilInterpolation, []},
       + |{Jump.CredoChecks.PreferChangeOverUpDownMigrations, []},
       + |{Jump.CredoChecks.PreferTextColumns, []},
       + |{Jump.CredoChecks.SafeBinaryToTerm, []},

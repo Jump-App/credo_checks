@@ -18,6 +18,14 @@ defmodule Jump.CredoChecks.NoWordSigilInterpolation do
       Use an explicit list such as `["name", "net worth", "balance"]` when
       items require interpolation. This applies to all lowercase `~w` modifiers:
       strings, atoms, and charlists.
+
+          two_names = "john smith"
+
+          # ❌ Bad — interpolation splits two_names into separate list items
+          ~w(hello \#{two_names} world)
+
+          # ✅ Good — two_names stays a single list item
+          ["hello", two_names, "world"]
       """
     ]
 

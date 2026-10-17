@@ -57,14 +57,14 @@ runs:
   using: "composite"
   steps:
     - name: Setup elixir
-      uses: erlef/setup-beam@v1
+      uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
       id: beam
       with:
         elixir-version: ${{ inputs.elixir-version }}
         otp-version: ${{ inputs.otp-version }}
 
     - name: Get deps cache
-      uses: actions/cache@v3
+      uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
       with:
         path: deps/
         key: deps-${{ inputs.cache-key }}-${{ runner.os }}-${{ hashFiles('**/mix.lock') }}
@@ -72,7 +72,7 @@ runs:
           deps-${{ inputs.cache-key }}-${{ runner.os }}-
 
     - name: Get build cache
-      uses: actions/cache@v3
+      uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
       id: build-cache
       with:
         path: _build/${{env.MIX_ENV}}/
@@ -81,7 +81,7 @@ runs:
           build-${{ inputs.cache-key }}-${{ runner.os }}-${{ inputs.otp-version }}-${{ inputs.elixir-version }}-${{ env.MIX_ENV }}-
 
     - name: Get Hex cache
-      uses: actions/cache@v3
+      uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
       id: hex-cache
       with:
         path: ~/.hex
@@ -127,6 +127,8 @@ runs:
       if: inputs.build-deps == 'true'
 
     - name: Compile Application
-      run: mix compile ${{ inputs.build-flags }}
+      run: mix compile ${INPUTS_BUILD_FLAGS}
       shell: sh
       if: inputs.build-app == 'true'
+      env:
+        INPUTS_BUILD_FLAGS: ${{ inputs.build-flags }}

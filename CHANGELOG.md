@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0
 
 * Added `Jump.CredoChecks.NoWordSigilInterpolation`, which flags interpolation inside lowercase word sigils (`~w`). The sigil splits on whitespace after interpolation, so quoting a phrase doesn't keep it together and interpolated values can unexpectedly become multiple list items. Use an explicit list instead.
 * `Jump.CredoChecks.LiveViewFormCanBeRehydrated` no longer crashes on `embed_templates` calls with options (e.g. `embed_templates "templates/*", suffix: "_html"`) ([#51](https://github.com/Jump-App/credo_checks/issues/51)).

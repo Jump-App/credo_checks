@@ -340,6 +340,26 @@ defmodule Jump.CredoChecks.UndeclaredExternalResourceTest do
     |> refute_issues()
   end
 
+  test "does not alert on typespecs that mention File types" do
+    """
+    defmodule MyApp.FFmpeg.Error do
+      @type reason ::
+              {:spawn, String.t()}
+              | {:file, File.posix(), Path.t()}
+      @typep stat :: File.Stat.t()
+      @opaque handle :: File.io_device()
+      @spec read(Path.t()) :: {:ok, binary()} | {:error, File.posix()}
+      @callback open(Path.t()) :: {:ok, File.io_device()}
+      @macrocallback stream(Path.t()) :: File.Stream.t()
+
+      defexception [:reason]
+    end
+    """
+    |> to_source_file()
+    |> run_check(UndeclaredExternalResource)
+    |> refute_issues()
+  end
+
   test "does not alert on a type of a module aliased to the name File" do
     """
     defmodule Foo do

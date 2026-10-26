@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* `Jump.CredoChecks.UndeclaredExternalResource` no longer flags typespec attributes (`@type`, `@spec`, `@callback`, etc.) that mention `File` types like `File.posix()`, since typespecs are never evaluated and so can't read from the file system.
+
 ## v0.7.0
 
 * Added `Jump.CredoChecks.NoWordSigilInterpolation`, which flags interpolation inside lowercase word sigils (`~w`). The sigil splits on whitespace after interpolation, so quoting a phrase doesn't keep it together and interpolated values can unexpectedly become multiple list items. Use an explicit list instead.

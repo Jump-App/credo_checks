@@ -43,6 +43,9 @@ defmodule Jump.CredoChecks.UndeclaredExternalResource do
   alias Credo.IssueMeta
   alias Credo.SourceFile
 
+  # Typespec attributes are never evaluated, so `File.posix()` and the like are type references, not file system calls.
+  @typespec_attributes [:type, :typep, :opaque, :spec, :callback, :macrocallback]
+
   @doc false
   @impl Credo.Check
   def run(%SourceFile{filename: filename} = source_file, params \\ []) do
@@ -209,7 +212,8 @@ defmodule Jump.CredoChecks.UndeclaredExternalResource do
   defp file_dependent_attributes(body, attrs, file_aliased?) do
     body
     |> walk_module([], fn
-      {:@, meta, [{name, _, [value]}]} = node, acc when is_atom(name) and name != :external_resource ->
+      {:@, meta, [{name, _, [value]}]} = node, acc
+      when is_atom(name) and name != :external_resource and name not in @typespec_attributes ->
         case file_call_paths(value, attrs, file_aliased?) do
           :no_file_calls -> {node, acc}
           {:file_calls, paths} -> {node, [{name, meta[:line], paths} | acc]}

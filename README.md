@@ -152,7 +152,7 @@ The following instructions assume you already have Credo configured and working 
     ```elixir
     def deps do
       [
-        {:jump_credo_checks, "~> 0.6", only: [:dev], runtime: false},
+        {:jump_credo_checks, "~> 0.7", only: [:dev], runtime: false},
       ]
     end
     ```

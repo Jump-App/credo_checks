@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.1
 
 * `Jump.CredoChecks.UndeclaredExternalResource` no longer flags typespec attributes (`@type`, `@spec`, `@callback`, etc.) that mention `File` types like `File.posix()`, since typespecs are never evaluated and so can't read from the file system.
 

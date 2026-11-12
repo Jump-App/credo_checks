@@ -127,7 +127,7 @@ jobs:
           mix docs --warnings-as-errors
 
   publish:
-    name: Tag and submit to Hex
+    name: Tag and publish to Hex
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.detect.outputs.changed == 'true'))
     needs: [detect, validate]
     runs-on: ubuntu-latest
@@ -185,15 +185,11 @@ jobs:
       - name: Publish package and documentation using workload identity
         run: mix hex.publish --yes
 
-      - name: Record the approval step
+      - name: Record the published release
         run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ### Submitted to Hex
-
-          The publish command succeeded. With staged publishing enabled, this
-          means the release is awaiting approval, not yet available to users.
-
-          Open [your Hex dashboard](https://hex.pm/dashboard),
-          verify the version, commit, workflow and package/docs checksums, then
-          approve with 2FA. See the publish log for the direct staged release URL.
-          EOF
+          {
+            echo '### Published to Hex'
+            printf '\nVersion `%s` from commit `%s` is live:\n\n' "$RELEASE_VERSION" "$GITHUB_SHA"
+            printf -- '- https://hex.pm/packages/jump_credo_checks/%s\n' "$RELEASE_VERSION"
+            printf -- '- https://hexdocs.pm/jump_credo_checks/%s\n' "$RELEASE_VERSION"
+          } >> "$GITHUB_STEP_SUMMARY"

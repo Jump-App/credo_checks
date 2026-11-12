@@ -1,0 +1,199 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  ELIXIR_VERSION: '1.19.4'
+  OTP_VERSION: '28.3.1'
+
+jobs:
+  detect:
+    name: Detect package version change
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changed: ${{ steps.version.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Compare package versions
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          read_version() {
+            MIX_PROJECT_FILE="$1" elixir -e '
+              Mix.start()
+              Code.require_file(System.fetch_env!("MIX_PROJECT_FILE"))
+              version = Mix.Project.config()[:version]
+              Version.parse!(version)
+              IO.puts(version)
+            '
+          }
+
+          version=$(read_version mix.exs)
+          previous_version=""
+          changed=false
+          case "$EVENT_NAME" in
+            push) base_sha="$PUSH_BEFORE" ;;
+            pull_request) base_sha="$PR_BASE_SHA" ;;
+            workflow_dispatch) base_sha="" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+
+          if [ -n "$base_sha" ]; then
+            if [[ "$base_sha" =~ ^0+$ ]]; then
+              changed=true
+            else
+              if ! git cat-file -e "$base_sha^{commit}"; then
+                git fetch --no-tags origin "$base_sha"
+              fi
+              previous_mix=$(mktemp "$RUNNER_TEMP/release-mix-XXXXXX")
+              git show "$base_sha:mix.exs" > "$previous_mix"
+              previous_version=$(read_version "$previous_mix")
+              if [ "$version" != "$previous_version" ]; then
+                changed=true
+                RELEASE_VERSION="$version" PREVIOUS_VERSION="$previous_version" elixir -e '
+                  unless Version.compare(System.fetch_env!("RELEASE_VERSION"), System.fetch_env!("PREVIOUS_VERSION")) == :gt do
+                    IO.puts(:stderr, "The package version must increase when it changes")
+                    System.halt(1)
+                  end
+                '
+              fi
+            fi
+          fi
+
+          printf 'version=%s\nchanged=%s\n' "$version" "$changed" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Package version'
+            printf '\nCurrent: `%s`\n\n' "$version"
+            printf 'Previous: `%s`\n\n' "${previous_version:-not compared (manual run or new branch)}"
+            printf 'Changed: **%s**\n' "$changed"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  validate:
+    name: Validate release
+    needs: detect
+    if: needs.detect.outputs.changed == 'true' || github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Require a release from main
+        if: github.event_name != 'pull_request'
+        run: test "$GITHUB_REF" = refs/heads/main
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Install Hex and Rebar
+        run: |
+          mix local.hex 2.6.0 --force
+          mix local.rebar --force
+
+      - run: mix deps.get
+
+      - name: Compile, check dependencies and formatting, test, and run Credo
+        run: mix check
+
+      - name: Build package and documentation without publishing
+        run: |
+          mix hex.build --output /tmp/jump_credo_checks.tar
+          mix docs --warnings-as-errors
+
+  publish:
+    name: Tag v${{ needs.detect.outputs.version }} and submit to Hex for approval
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.detect.outputs.changed == 'true'))
+    needs: [detect, validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    # Validation-only runs never queue or displace a pending publication.
+    concurrency:
+      group: hex-release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      MIX_ENV: dev
+      RELEASE_VERSION: ${{ needs.detect.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Use a fresh runner without restored ~/.hex/build caches.
+      # Stored Hex credentials take precedence over workload identity.
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Install Hex and Rebar
+        run: |
+          mix local.hex 2.6.0 --force
+          mix local.rebar --force
+
+      - run: mix deps.get
+
+      - name: Create the release tag on the validated commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${RELEASE_VERSION}"
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            # Allow a failed publish to be retried, but never move a tag.
+            if [ "$(git rev-parse "refs/tags/$tag^{commit}")" != "$GITHUB_SHA" ]; then
+              echo "Tag $tag already exists on a different commit" >&2
+              exit 1
+            fi
+            echo "Reusing $tag on $GITHUB_SHA"
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              --raw-field "ref=refs/tags/$tag" \
+              --raw-field "sha=$GITHUB_SHA"
+          fi
+
+      - name: Publish package and documentation using workload identity
+        run: mix hex.publish --yes
+
+      - name: Record the approval step
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### Submitted to Hex
+
+          The publish command succeeded. With staged publishing enabled, this
+          means the release is awaiting approval, not yet available to users.
+
+          Open [your Hex dashboard](https://hex.pm/dashboard),
+          verify the version, commit, workflow and package/docs checksums, then
+          approve with 2FA. See the publish log for the direct staged release URL.
+          EOF

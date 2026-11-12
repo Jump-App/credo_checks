@@ -127,7 +127,7 @@ jobs:
           mix docs --warnings-as-errors
 
   publish:
-    name: Tag v${{ needs.detect.outputs.version }} and submit to Hex for approval
+    name: Tag and submit to Hex
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.detect.outputs.changed == 'true'))
     needs: [detect, validate]
     runs-on: ubuntu-latest

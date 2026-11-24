@@ -62,6 +62,7 @@ defmodule Mix.Tasks.JumpCredoChecks.InstallTest do
       + |{Jump.CredoChecks.NoWordSigilInterpolation, []},
       + |{Jump.CredoChecks.PreferChangeOverUpDownMigrations, []},
       + |{Jump.CredoChecks.PreferTextColumns, []},
+      + |{Jump.CredoChecks.QuotedHEExInterpolation, []},
       + |{Jump.CredoChecks.SafeBinaryToTerm, []},
       + |{Jump.CredoChecks.TestHasNoAssertions, []},
       + |{Jump.CredoChecks.TooManyAssertions, []},

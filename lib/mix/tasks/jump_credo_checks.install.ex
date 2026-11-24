@@ -38,6 +38,7 @@ if Code.ensure_loaded?(Igniter) do
     alias Jump.CredoChecks.NoWordSigilInterpolation
     alias Jump.CredoChecks.PreferChangeOverUpDownMigrations
     alias Jump.CredoChecks.PreferTextColumns
+    alias Jump.CredoChecks.QuotedHEExInterpolation
     alias Jump.CredoChecks.SafeBinaryToTerm
     alias Jump.CredoChecks.TestHasNoAssertions
     alias Jump.CredoChecks.TooManyAssertions
@@ -65,6 +66,7 @@ if Code.ensure_loaded?(Igniter) do
       NoWordSigilInterpolation,
       PreferChangeOverUpDownMigrations,
       PreferTextColumns,
+      QuotedHEExInterpolation,
       SafeBinaryToTerm,
       TestHasNoAssertions,
       TooManyAssertions,

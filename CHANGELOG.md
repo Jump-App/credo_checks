@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Added `Jump.CredoChecks.QuotedHEExInterpolation` to flag literal interpolation in quoted HEEx attributes, with a template-local skip comment for intentional literals.
+
 ## v0.7.1
 
 * `Jump.CredoChecks.UndeclaredExternalResource` no longer flags typespec attributes (`@type`, `@spec`, `@callback`, etc.) that mention `File` types like `File.posix()`, since typespecs are never evaluated and so can't read from the file system.

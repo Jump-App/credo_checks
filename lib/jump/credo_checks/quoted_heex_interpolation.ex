@@ -1,8 +1,27 @@
 defmodule Jump.CredoChecks.QuotedHEExInterpolation do
   @moduledoc "Warns about literal interpolation in quoted HEEx attribute values."
-  use Credo.Check, category: :warning, explanations: [check: @moduledoc]
+  use Credo.Check,
+    category: :warning,
+    explanations: [
+      check: """
+      Quoted HEEx attribute values are literal strings, so `\#{...}` inside them is not
+      interpolated. The rendered attribute contains the characters `\#{...}` verbatim.
+
+      Wrap the value in braces to make it an Elixir string expression instead:
+
+          # ❌ Bad: renders id="item-\#{@id}" literally
+          <div id="item-\#{@id}">
+
+          # ✅ Good: renders id="item-42"
+          <div id={"item-\#{@id}"}>
+
+      Only inline `~H` sigils are checked. For an intentional literal, put
+      `<%!-- credo:disable-for-next-tag Jump.CredoChecks.QuotedHEExInterpolation --%>` immediately before the opening tag.
+      """
+    ]
 
   @directive "<%!-- credo:disable-for-next-tag Jump.CredoChecks.QuotedHEExInterpolation --%>"
+
   # Consume balanced expressions as one token, including braces inside quoted strings.
   @expr ~S/(?<expr>\{(?:[^{}"']++|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|(?&expr))*\})/
   @text Regex.compile!("\\A(?:<%!--.*?--%>|<!--.*?-->|<%.*?%>|<[.:A-Za-z][\\w.:\\-]*|" <> @expr <> "|[^<{]++|.)", "s")
@@ -15,10 +34,7 @@ defmodule Jump.CredoChecks.QuotedHEExInterpolation do
 
   @impl Credo.Check
   def run(source_file, params \\ []) do
-    issue =
-      format_issue(IssueMeta.for(source_file, params),
-        message: "Quoted HEEx attributes are literal. Use a braced string expression for interpolation."
-      )
+    issue = format_issue(IssueMeta.for(source_file, params), message: "")
 
     {_, issues} =
       Macro.prewalk(SourceFile.ast(source_file), [], fn
@@ -62,9 +78,21 @@ defmodule Jump.CredoChecks.QuotedHEExInterpolation do
 
   defp flag_interpolation(token, line, issue, issues) do
     if not String.starts_with?(token, "{") and String.contains?(token, ~S(#{)) do
-      [%{issue | line_no: line, trigger: token} | issues]
+      message =
+        "Quoted HEEx attributes are literal. You wrote `#{token}`, but you probably meant `#{suggestion(token)}`."
+
+      [%{issue | line_no: line, trigger: token, message: message} | issues]
     else
       issues
     end
+  end
+
+  defp suggestion(token) do
+    [name, delimiter, value] = Regex.run(~r/\A([^\s=]+)\s*=\s*(["'])(.*)\2\z/s, token, capture: :all_but_first)
+
+    # A single-quoted value may contain double quotes; ~s'...' keeps those valid.
+    if delimiter == "'" and String.contains?(value, ~S(")),
+      do: "#{name}={~s'#{value}'}",
+      else: ~s(#{name}={"#{value}"})
   end
 end

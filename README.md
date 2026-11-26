@@ -137,6 +137,7 @@ See the individual modules for detailed descriptions of each check type.
     ```
 - `Jump.CredoChecks.PreferChangeOverUpDownMigrations`: Detects Ecto migrations which define separate `up`/`down`
   callbacks but could instead take advantage of Ecto's automatic reversibility by using `change/0`.
+- `Jump.CredoChecks.QuotedHEExInterpolation`: Warns on quoted HEEx attributes like `id="button-#{num}"`; use `id={"button-#{num}"}` instead. Only inline `~H` sigils are checked; `.html.heex` template files are not. For an intentional literal, place `<%!-- credo:disable-for-next-tag Jump.CredoChecks.QuotedHEExInterpolation --%>` immediately before the opening tag (whitespace is allowed).
 - `Jump.CredoChecks.UnusedLiveViewAssign`: Detects LiveView assigns that are written by a module but never read in that module's Elixir or HEEx source.
 
 
@@ -206,6 +207,7 @@ The following instructions assume you already have Credo configured and working 
               # Default start_after is "0"
               {Jump.CredoChecks.PreferChangeOverUpDownMigrations, start_after: "20240101000000"},
               {Jump.CredoChecks.PreferTextColumns, start_after: "20240101000000"},
+              {Jump.CredoChecks.QuotedHEExInterpolation, []},
               # Exclude files that intentionally decode fully-trusted (never attacker-controlled) input
               {Jump.CredoChecks.SafeBinaryToTerm, files: %{excluded: ["lib/my_app/trusted_decoder.ex"]}},
               {Jump.CredoChecks.TestHasNoAssertions, custom_assertion_functions: [:await_has, :await_with_timeout]},
